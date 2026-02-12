@@ -1,7 +1,15 @@
 import { DateTime } from "luxon";
 import * as React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { CalendarInfo, OFCEvent } from "../../types";
+
+const AUTO_SAVE_DEBOUNCE_MS = 400;
+
+const COLOR_PRESETS = [
+    { id: "work", label: "업무", color: "#1F3A8A" },
+    { id: "exercise", label: "운동", color: "#059669" },
+    { id: "personal", label: "개인", color: "#EA580C" },
+] as const;
 
 function makeChangeListener<T>(
     setState: React.Dispatch<React.SetStateAction<T>>,
@@ -75,8 +83,15 @@ const DaySelect = ({
     );
 };
 
+interface SubmitOptions {
+    markCreated?: () => void;
+}
 interface EditEventProps {
-    submit: (frontmatter: OFCEvent, calendarIndex: number) => Promise<void>;
+    submit: (
+        frontmatter: OFCEvent,
+        calendarIndex: number,
+        options?: SubmitOptions
+    ) => Promise<void>;
     readonly calendars: {
         id: string;
         name: string;
@@ -86,6 +101,9 @@ interface EditEventProps {
     initialEvent?: Partial<OFCEvent>;
     open?: () => Promise<void>;
     deleteEvent?: () => Promise<void>;
+    closeModal?: () => void;
+    registerBeforeClose?: (fn: () => Promise<void>) => void;
+    isCreate?: boolean;
 }
 
 export const EditEvent = ({
@@ -95,6 +113,9 @@ export const EditEvent = ({
     deleteEvent,
     calendars,
     defaultCalendarIndex,
+    closeModal,
+    registerBeforeClose,
+    isCreate = false,
 }: EditEventProps) => {
     const [date, setDate] = useState(
         initialEvent
@@ -148,7 +169,6 @@ export const EditEvent = ({
     const [eventColor, setEventColor] = useState(
         initialEvent?.color || defaultEventColor
     );
-    const [useCustomColor, setUseCustomColor] = useState(!!initialEvent?.color);
 
     const [complete, setComplete] = useState(
         initialEvent?.type === "single" &&
@@ -165,22 +185,14 @@ export const EditEvent = ({
     );
 
     const titleRef = useRef<HTMLInputElement>(null);
-    useEffect(() => {
-        if (titleRef.current) {
-            titleRef.current.focus();
-        }
-    }, [titleRef]);
+    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hasCreatedRef = useRef(false);
 
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        await submit(
-            {
+    const getEventData = useCallback(
+        () =>
+            ({
                 ...{ title },
-                ...(useCustomColor
-                    ? { color: eventColor }
-                    : initialEvent?.color
-                    ? { color: null }
-                    : {}),
+                ...{ color: eventColor },
                 ...(allDay
                     ? { allDay: true }
                     : { allDay: false, startTime: startTime || "", endTime }),
@@ -205,9 +217,108 @@ export const EditEvent = ({
                           endDate: endDate || null,
                           completed: isTask ? complete : null,
                       }),
-            },
-            calendarIndex
+            } as OFCEvent),
+        [
+            title,
+            eventColor,
+            allDay,
+            startTime,
+            endTime,
+            isRecurring,
+            daysOfWeek,
+            date,
+            endRecur,
+            endDate,
+            isTask,
+            complete,
+        ]
+    );
+
+    const performSave = useCallback(
+        async (overrides?: Partial<OFCEvent>) => {
+            const base = getEventData();
+            const data = (
+                overrides ? { ...base, ...overrides } : base
+            ) as OFCEvent;
+            if (isCreate && !data.title) return;
+            if (isCreate && !date) return;
+            if (isCreate && hasCreatedRef.current) return;
+            try {
+                await submit(data, calendarIndex, {
+                    markCreated: () => {
+                        hasCreatedRef.current = true;
+                    },
+                });
+                if (isCreate) hasCreatedRef.current = true;
+            } catch (_e) {
+                /* submit handles notice */
+            }
+        },
+        [getEventData, isCreate, date, calendarIndex, submit]
+    );
+
+    const autoSave = useCallback(() => {
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+        }
+        saveTimeoutRef.current = setTimeout(
+            () => performSave(undefined),
+            AUTO_SAVE_DEBOUNCE_MS
         );
+    }, [performSave]);
+
+    const saveImmediately = useCallback(
+        (overrides?: Partial<OFCEvent>) => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+                saveTimeoutRef.current = null;
+            }
+            return performSave(overrides);
+        },
+        [performSave]
+    );
+
+    useEffect(() => {
+        if (titleRef.current) {
+            titleRef.current.focus();
+        }
+    }, [titleRef]);
+
+    useEffect(
+        () => () => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+        },
+        []
+    );
+
+    useEffect(() => {
+        if (registerBeforeClose) {
+            registerBeforeClose(async () => saveImmediately());
+        }
+    }, [registerBeforeClose, saveImmediately]);
+
+    const wrapChange =
+        <T,>(
+            setter: React.Dispatch<React.SetStateAction<T>>,
+            fromString: (val: string) => T
+        ) =>
+        (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+            setter(fromString(e.target.value));
+            autoSave();
+        };
+
+    const wrapCheck =
+        (setter: React.Dispatch<React.SetStateAction<boolean>>) =>
+        (e: React.ChangeEvent<HTMLInputElement>) => {
+            setter(e.target.checked);
+            autoSave();
+        };
+
+    const wrapDays = (fn: (days: string[]) => void) => (days: string[]) => {
+        fn(days);
+        autoSave();
     };
 
     return (
@@ -218,7 +329,12 @@ export const EditEvent = ({
                 </p>
             </div>
 
-            <form onSubmit={handleSubmit}>
+            <form
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    saveImmediately();
+                }}
+            >
                 <p>
                     <input
                         ref={titleRef}
@@ -227,17 +343,76 @@ export const EditEvent = ({
                         value={title}
                         placeholder={"Add title"}
                         required
-                        onChange={makeChangeListener(setTitle, (x) => x)}
+                        onChange={wrapChange(setTitle, (x) => x)}
                     />
+                </p>
+                <p
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        flexWrap: "wrap",
+                    }}
+                >
+                    <input
+                        type="color"
+                        value={eventColor}
+                        onChange={(e) => {
+                            const c = e.target.value;
+                            setEventColor(c);
+                            saveImmediately({ color: c });
+                        }}
+                        style={{
+                            width: "2rem",
+                            height: "1.5rem",
+                            padding: 0,
+                            border: "none",
+                            cursor: "pointer",
+                        }}
+                        title="Event color"
+                    />
+                    {COLOR_PRESETS.map((preset) => (
+                        <label
+                            key={preset.id}
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.25rem",
+                                cursor: "pointer",
+                            }}
+                        >
+                            <input
+                                type="radio"
+                                name="colorPreset"
+                                checked={
+                                    eventColor.toUpperCase() ===
+                                    preset.color.toUpperCase()
+                                }
+                                onChange={() => {
+                                    setEventColor(preset.color);
+                                    saveImmediately({ color: preset.color });
+                                }}
+                            />
+                            <span
+                                style={{
+                                    width: "0.75rem",
+                                    height: "0.75rem",
+                                    borderRadius: "2px",
+                                    backgroundColor: preset.color,
+                                }}
+                            />
+                            {preset.label}
+                        </label>
+                    ))}
                 </p>
                 <p>
                     <select
                         id="calendar"
                         value={calendarIndex}
-                        onChange={makeChangeListener(
-                            setCalendarIndex,
-                            parseInt
-                        )}
+                        onChange={(e) => {
+                            setCalendarIndex(parseInt(e.target.value));
+                            autoSave();
+                        }}
                     >
                         {calendars.map((cal, idx) => (
                             <option
@@ -268,7 +443,7 @@ export const EditEvent = ({
                             value={date}
                             required={!isRecurring}
                             // @ts-ignore
-                            onChange={makeChangeListener(setDate, (x) => x)}
+                            onChange={wrapChange(setDate, (x) => x)}
                         />
                     )}
 
@@ -281,10 +456,7 @@ export const EditEvent = ({
                                 id="startTime"
                                 value={startTime}
                                 required
-                                onChange={makeChangeListener(
-                                    setStartTime,
-                                    (x) => x
-                                )}
+                                onChange={wrapChange(setStartTime, (x) => x)}
                             />
                             -
                             <input
@@ -292,10 +464,7 @@ export const EditEvent = ({
                                 id="endTime"
                                 value={endTime}
                                 required
-                                onChange={makeChangeListener(
-                                    setEndTime,
-                                    (x) => x
-                                )}
+                                onChange={wrapChange(setEndTime, (x) => x)}
                             />
                         </>
                     )}
@@ -305,7 +474,7 @@ export const EditEvent = ({
                     <input
                         id="allDay"
                         checked={allDay}
-                        onChange={(e) => setAllDay(e.target.checked)}
+                        onChange={wrapCheck(setAllDay)}
                         type="checkbox"
                     />
                 </p>
@@ -314,7 +483,7 @@ export const EditEvent = ({
                     <input
                         id="recurring"
                         checked={isRecurring}
-                        onChange={(e) => setIsRecurring(e.target.checked)}
+                        onChange={wrapCheck(setIsRecurring)}
                         type="checkbox"
                     />
                 </p>
@@ -323,7 +492,7 @@ export const EditEvent = ({
                     <>
                         <DaySelect
                             value={daysOfWeek}
-                            onChange={setDaysOfWeek}
+                            onChange={wrapDays(setDaysOfWeek)}
                         />
                         <p>
                             Starts recurring
@@ -332,17 +501,14 @@ export const EditEvent = ({
                                 id="startDate"
                                 value={date}
                                 // @ts-ignore
-                                onChange={makeChangeListener(setDate, (x) => x)}
+                                onChange={wrapChange(setDate, (x) => x)}
                             />
                             and stops recurring
                             <input
                                 type="date"
                                 id="endDate"
                                 value={endRecur}
-                                onChange={makeChangeListener(
-                                    setEndRecur,
-                                    (x) => x
-                                )}
+                                onChange={wrapChange(setEndRecur, (x) => x)}
                             />
                         </p>
                     </>
@@ -352,34 +518,9 @@ export const EditEvent = ({
                     <input
                         id="task"
                         checked={isTask}
-                        onChange={(e) => {
-                            setIsTask(e.target.checked);
-                        }}
+                        onChange={wrapCheck(setIsTask)}
                         type="checkbox"
                     />
-                </p>
-                <p>
-                    <label htmlFor="customColor">Custom event color </label>
-                    <input
-                        id="customColor"
-                        type="checkbox"
-                        checked={useCustomColor}
-                        onChange={(e) => setUseCustomColor(e.target.checked)}
-                    />
-                    {useCustomColor && (
-                        <input
-                            type="color"
-                            value={eventColor}
-                            onChange={(e) => setEventColor(e.target.value)}
-                            style={{
-                                marginLeft: "0.5rem",
-                                width: "2rem",
-                                height: "1.5rem",
-                                padding: 0,
-                                border: "none",
-                            }}
-                        />
-                    )}
                 </p>
 
                 {isTask && (
@@ -390,13 +531,14 @@ export const EditEvent = ({
                             checked={
                                 !(complete === false || complete === undefined)
                             }
-                            onChange={(e) =>
+                            onChange={(e) => {
                                 setComplete(
                                     e.target.checked
                                         ? DateTime.now().toISO()
                                         : false
-                                )
-                            }
+                                );
+                                autoSave();
+                            }}
                             type="checkbox"
                         />
                     </>
@@ -409,7 +551,11 @@ export const EditEvent = ({
                         width: "100%",
                     }}
                 >
-                    <button type="submit"> Save Event </button>
+                    {closeModal && (
+                        <button type="button" onClick={closeModal}>
+                            Close
+                        </button>
+                    )}
                     <span>
                         {deleteEvent && (
                             <button

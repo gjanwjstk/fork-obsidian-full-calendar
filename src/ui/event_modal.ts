@@ -24,15 +24,19 @@ export function launchCreateModal(
                 name: cal.name,
             };
         });
-    new ReactModal(plugin.app, async (closeModal) =>
+    new ReactModal(plugin.app, async (closeModal, registerBeforeClose) =>
         React.createElement(EditEvent, {
             initialEvent: partialEvent,
             calendars,
             defaultCalendarIndex: 0,
-            submit: async (data, calendarIndex) => {
+            closeModal,
+            registerBeforeClose,
+            isCreate: true,
+            submit: async (data, calendarIndex, options) => {
                 const calendarId = calendars[calendarIndex].id;
                 try {
                     await plugin.cache.addEvent(calendarId, data);
+                    options?.markCreated?.();
                 } catch (e) {
                     if (e instanceof Error) {
                         new Notice("Error when creating event: " + e.message);
@@ -69,12 +73,15 @@ export function launchEditModal(plugin: FullCalendarPlugin, eventId: string) {
     const isGoogleCalEvent =
         plugin.cache.getCalendarById(calId) instanceof GoogleCalendar;
 
-    new ReactModal(plugin.app, async (closeModal) =>
+    new ReactModal(plugin.app, async (closeModal, registerBeforeClose) =>
         React.createElement(EditEvent, {
             initialEvent: eventToEdit,
             calendars,
             defaultCalendarIndex: calIdx,
-            submit: async (data, calendarIndex) => {
+            closeModal,
+            registerBeforeClose,
+            isCreate: false,
+            submit: async (data, calendarIndex, _options) => {
                 try {
                     if (calendarIndex !== calIdx) {
                         await plugin.cache.moveEventToCalendar(
@@ -85,11 +92,20 @@ export function launchEditModal(plugin: FullCalendarPlugin, eventId: string) {
                     await plugin.cache.updateEventWithId(eventId, data);
                 } catch (e) {
                     if (e instanceof Error) {
-                        new Notice("Error when updating event: " + e.message);
+                        const msg = e.message;
+                        const isStale =
+                            msg.includes("not present in event store") ||
+                            msg.includes("not registered");
+                        if (isStale) {
+                            new Notice(
+                                "이벤트가 캐시에서 제거되었습니다. 캘린더를 새로고침해주세요."
+                            );
+                        } else {
+                            new Notice("Error when updating event: " + msg);
+                        }
                         console.error(e);
                     }
                 }
-                closeModal();
             },
             // Google Calendar events don't have a note file in the Vault
             open: isGoogleCalEvent

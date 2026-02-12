@@ -89,6 +89,9 @@ function stringifyYamlAtom(v: PrintableAtom): string {
         result += "[";
         result += v.map(stringifyYamlAtom).join(",");
         result += "]";
+    } else if (typeof v === "string" && v.startsWith("#")) {
+        // YAML에서 #은 주석 시작. hex 색상(#RRGGBB)은 따옴표로 감싸야 함.
+        result += `"${v}"`;
     } else {
         result += `${v}`;
     }

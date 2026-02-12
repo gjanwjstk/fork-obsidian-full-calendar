@@ -104,23 +104,64 @@ const checkboxTodo = (s: string) => {
     return match[1] === " " ? false : match[1];
 };
 
+// Day Planner format: "HH:MM - HH:MM Title" or "H:MM - H:MM Title"
+const dayPlannerRangeRegex = /^(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})\s+(.+)$/;
+// Day Planner start-only format: "HH:MM Title"
+const dayPlannerStartOnlyRegex = /^(\d{1,2}:\d{2})\s+([^\[].*)$/;
+
+/**
+ * Check if a line (after stripping list marker/checkbox) is in Day Planner format.
+ */
+export const isDayPlannerFormat = (cleanText: string): boolean =>
+    dayPlannerRangeRegex.test(cleanText) ||
+    dayPlannerStartOnlyRegex.test(cleanText);
+
 const getInlineEventFromLine = (
     text: string,
     globalAttrs: Partial<OFCEvent>
 ): OFCEvent | null => {
     const attrs = getInlineAttributes(text);
 
-    // Shortcut validation if there are no inline attributes.
-    if (Object.keys(attrs).length === 0) {
-        return null;
+    // If inline attributes exist, use the original parsing logic.
+    if (Object.keys(attrs).length > 0) {
+        return validateEvent({
+            title: text.replace(listRegex, "").replace(fieldRegex, "").trim(),
+            completed: checkboxTodo(text),
+            ...globalAttrs,
+            ...attrs,
+        });
     }
 
-    return validateEvent({
-        title: text.replace(listRegex, "").replace(fieldRegex, "").trim(),
-        completed: checkboxTodo(text),
-        ...globalAttrs,
-        ...attrs,
-    });
+    // Fallback: try Day Planner format (e.g. "- [x] 13:30 - 15:30 Task title")
+    const cleanText = text.replace(listRegex, "").trim();
+
+    // Try time range format: HH:MM - HH:MM Title
+    const rangeMatch = cleanText.match(dayPlannerRangeRegex);
+    if (rangeMatch) {
+        return validateEvent({
+            title: rangeMatch[3].trim(),
+            startTime: rangeMatch[1],
+            endTime: rangeMatch[2],
+            allDay: false,
+            completed: checkboxTodo(text),
+            ...globalAttrs,
+        });
+    }
+
+    // Try start-only format: HH:MM Title
+    const startMatch = cleanText.match(dayPlannerStartOnlyRegex);
+    if (startMatch) {
+        return validateEvent({
+            title: startMatch[2].trim(),
+            startTime: startMatch[1],
+            endTime: null,
+            allDay: false,
+            completed: checkboxTodo(text),
+            ...globalAttrs,
+        });
+    }
+
+    return null;
 };
 
 function getAllInlineEventsFromFile(
@@ -190,6 +231,37 @@ const makeListItem = (
     } ${title} ${generateInlineAttributes(attrs)}`;
 };
 
+/**
+ * Serialize an event in Day Planner format: "- [x] HH:MM - HH:MM Title"
+ */
+const makeDayPlannerListItem = (
+    data: OFCEvent,
+    whitespacePrefix: string = ""
+): string => {
+    if (data.type !== "single") {
+        throw new Error("Can only pass in single event.");
+    }
+    const { completed, title } = data;
+    const checkbox = (() => {
+        if (completed !== null && completed !== undefined) {
+            return `[${completed ? "x" : " "}] `;
+        }
+        return "";
+    })();
+
+    let timeStr = "";
+    if (!data.allDay) {
+        const { startTime, endTime } = data;
+        if (startTime && endTime) {
+            timeStr = `${startTime} - ${endTime} `;
+        } else if (startTime) {
+            timeStr = `${startTime} `;
+        }
+    }
+
+    return `${whitespacePrefix}- ${checkbox}${timeStr}${title}`;
+};
+
 const modifyListItem = (line: string, data: OFCEvent): string | null => {
     const listMatch = line.match(listRegex);
     if (!listMatch) {
@@ -198,6 +270,12 @@ const modifyListItem = (line: string, data: OFCEvent): string | null => {
             { line }
         );
         return null;
+    }
+
+    // Preserve Day Planner format if the original line was in that format
+    const cleanText = line.replace(listRegex, "").trim();
+    if (isDayPlannerFormat(cleanText)) {
+        return makeDayPlannerListItem(data, listMatch[1]);
     }
 
     return makeListItem(data, listMatch[1]);

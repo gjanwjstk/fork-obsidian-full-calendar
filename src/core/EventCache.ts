@@ -7,6 +7,7 @@ import EventStore, { StoredEvent } from "./EventStore";
 import { CalendarInfo, OFCEvent, validateEvent } from "../types";
 import RemoteCalendar from "../calendars/RemoteCalendar";
 import FullNoteCalendar from "../calendars/FullNoteCalendar";
+import GoogleCalendar from "../calendars/GoogleCalendar";
 
 export type CalendarInitializerMap = Record<
     CalendarInfo["type"],
@@ -171,7 +172,9 @@ export default class EventCache {
         for (const [calId, calendar] of this.calendars.entries()) {
             const events = eventsByCalendar.get(calId) || [];
             result.push({
-                editable: calendar instanceof EditableCalendar,
+                editable:
+                    calendar instanceof EditableCalendar ||
+                    calendar instanceof GoogleCalendar,
                 events: events.map(({ event, id }) => ({ event, id })), // make sure not to leak location data past the cache.
                 color: calendar.color,
                 id: calId,
@@ -191,7 +194,7 @@ export default class EventCache {
             return false;
         }
         const cal = this.getCalendarById(calId);
-        return cal instanceof EditableCalendar;
+        return cal instanceof EditableCalendar || cal instanceof GoogleCalendar;
     }
 
     getEventById(s: string): OFCEvent | null {
@@ -228,6 +231,31 @@ export default class EventCache {
             );
         }
         return { calendar, location };
+    }
+
+    /**
+     * Get the calendar for an editable event (EditableCalendar or GoogleCalendar).
+     * Use this for UI operations where only the calendar reference is needed.
+     * @param eventId ID of event in question.
+     * @returns Calendar instance (EditableCalendar or GoogleCalendar).
+     */
+    getWritableCalendarForEvent(eventId: string): Calendar {
+        const details = this.store.getEventDetails(eventId);
+        if (!details) {
+            throw new Error(`Event ID ${eventId} not present in event store.`);
+        }
+        const { calendarId } = details;
+        const calendar = this.calendars.get(calendarId);
+        if (!calendar) {
+            throw new Error(`Calendar ID ${calendarId} is not registered.`);
+        }
+        if (
+            !(calendar instanceof EditableCalendar) &&
+            !(calendar instanceof GoogleCalendar)
+        ) {
+            throw new Error(`Read-only events cannot be modified.`);
+        }
+        return calendar;
     }
 
     ///
@@ -299,6 +327,24 @@ export default class EventCache {
         if (!calendar) {
             throw new Error(`Calendar ID ${calendarId} is not registered.`);
         }
+
+        // Handle Google Calendar
+        if (calendar instanceof GoogleCalendar) {
+            const googleEventId = await calendar.createGoogleEvent(event);
+            const eventWithId = { ...event, id: googleEventId };
+            const id = this.store.add({
+                calendar,
+                location: null,
+                id: googleEventId,
+                event: eventWithId,
+            });
+            this.updateViews(
+                [],
+                [{ event: eventWithId, id, calendarId: calendar.id }]
+            );
+            return true;
+        }
+
         if (!(calendar instanceof EditableCalendar)) {
             console.error(
                 `Event cannot be added to non-editable calendar of type ${calendar.type}`
@@ -322,6 +368,20 @@ export default class EventCache {
      * @param eventId ID of event to be deleted.
      */
     async deleteEvent(eventId: string): Promise<void> {
+        // Check if this is a Google Calendar event
+        const details = this.store.getEventDetails(eventId);
+        if (details) {
+            const calendar = this.calendars.get(details.calendarId);
+            if (calendar instanceof GoogleCalendar) {
+                const event = this.store.getEventById(eventId);
+                const googleEventId = event?.id || eventId;
+                this.store.delete(eventId);
+                await calendar.deleteGoogleEvent(googleEventId);
+                this.updateViews([eventId], []);
+                return;
+            }
+        }
+
         const { calendar, location } = this.getInfoForEditableEvent(eventId);
         this.store.delete(eventId);
         await calendar.deleteEvent(location);
@@ -338,6 +398,43 @@ export default class EventCache {
         eventId: string,
         newEvent: OFCEvent
     ): Promise<boolean> {
+        // Check if this is a Google Calendar event
+        const details = this.store.getEventDetails(eventId);
+        if (details) {
+            const calendar = this.calendars.get(details.calendarId);
+            if (calendar instanceof GoogleCalendar) {
+                const oldEvent = this.store.getEventById(eventId);
+                const googleEventId = oldEvent?.id || eventId;
+                console.debug(
+                    "updating Google Calendar event with ID",
+                    googleEventId
+                );
+
+                await calendar.updateGoogleEvent(googleEventId, newEvent);
+
+                const updatedEvent = { ...newEvent, id: googleEventId };
+                this.store.delete(eventId);
+                this.store.add({
+                    calendar,
+                    location: null,
+                    id: eventId,
+                    event: updatedEvent,
+                });
+
+                this.updateViews(
+                    [eventId],
+                    [
+                        {
+                            id: eventId,
+                            calendarId: calendar.id,
+                            event: updatedEvent,
+                        },
+                    ]
+                );
+                return true;
+            }
+        }
+
         const { calendar, location: oldLocation } =
             this.getInfoForEditableEvent(eventId);
         const { path, lineNumber } = oldLocation;
@@ -577,7 +674,7 @@ export default class EventCache {
                     });
                     this.updateCalendar({
                         id: calendar.id,
-                        editable: false,
+                        editable: calendar instanceof GoogleCalendar,
                         color: calendar.color,
                         events: newEvents,
                     });

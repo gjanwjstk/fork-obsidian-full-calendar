@@ -216,11 +216,100 @@ function PasswordInput<T extends Partial<CalendarInfo>>({
     );
 }
 
+function GoogleCalendarSelect<T extends Partial<CalendarInfo>>({
+    source,
+    changeListener,
+    googleCalendars,
+}: BasicProps<T> & {
+    googleCalendars: Array<{ id: string; summary: string; primary: boolean }>;
+}) {
+    let sourceWithGcal = source as SourceWith<
+        T,
+        { calendarId: undefined; name: undefined }
+    >;
+    return (
+        <>
+            <div className="setting-item">
+                <div className="setting-item-info">
+                    <div className="setting-item-name">Google Calendar</div>
+                    <div className="setting-item-description">
+                        Select a Google Calendar to add.
+                    </div>
+                </div>
+                <div className="setting-item-control">
+                    {googleCalendars.length > 0 ? (
+                        <select
+                            required
+                            value={(sourceWithGcal as any).calendarId || ""}
+                            onChange={(e) => {
+                                const selected = googleCalendars.find(
+                                    (c) => c.id === e.target.value
+                                );
+                                changeListener((x) => ({
+                                    ...sourceWithGcal,
+                                    calendarId: x,
+                                    name: selected?.summary || x,
+                                }))(e);
+                            }}
+                        >
+                            <option value="" disabled hidden>
+                                Choose a calendar
+                            </option>
+                            {googleCalendars.map((cal) => (
+                                <option key={cal.id} value={cal.id}>
+                                    {cal.summary}
+                                    {cal.primary ? " (Primary)" : ""}
+                                </option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input
+                            required
+                            type="text"
+                            placeholder="Calendar ID (e.g. email@gmail.com)"
+                            value={(sourceWithGcal as any).calendarId || ""}
+                            onChange={changeListener((x) => ({
+                                ...sourceWithGcal,
+                                calendarId: x,
+                                name: x,
+                            }))}
+                        />
+                    )}
+                </div>
+            </div>
+            <div className="setting-item">
+                <div className="setting-item-info">
+                    <div className="setting-item-name">Display Name</div>
+                    <div className="setting-item-description">
+                        Name to display for this calendar.
+                    </div>
+                </div>
+                <div className="setting-item-control">
+                    <input
+                        required
+                        type="text"
+                        value={(sourceWithGcal as any).name || ""}
+                        onChange={changeListener((x) => ({
+                            ...sourceWithGcal,
+                            name: x,
+                        }))}
+                    />
+                </div>
+            </div>
+        </>
+    );
+}
+
 interface AddCalendarProps {
     source: Partial<CalendarInfo>;
     directories: string[];
     headings: string[];
     submit: (source: CalendarInfo) => Promise<void>;
+    googleCalendars?: Array<{
+        id: string;
+        summary: string;
+        primary: boolean;
+    }>;
 }
 
 export const AddCalendarSource = ({
@@ -228,8 +317,10 @@ export const AddCalendarSource = ({
     directories,
     headings,
     submit,
+    googleCalendars,
 }: AddCalendarProps) => {
     const isCalDAV = source.type === "caldav";
+    const isGcal = source.type === "gcal";
 
     const [setting, setSettingState] = useState(source);
     const [submitting, setSubmitingState] = useState(false);
@@ -295,6 +386,13 @@ export const AddCalendarSource = ({
                     <PasswordInput
                         source={setting}
                         changeListener={makeChangeListener}
+                    />
+                )}
+                {isGcal && (
+                    <GoogleCalendarSelect
+                        source={setting}
+                        changeListener={makeChangeListener}
+                        googleCalendars={googleCalendars || []}
                     />
                 )}
                 <div className="setting-item">

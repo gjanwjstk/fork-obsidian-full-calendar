@@ -19,9 +19,12 @@ import FullNoteCalendar from "./calendars/FullNoteCalendar";
 import DailyNoteCalendar from "./calendars/DailyNoteCalendar";
 import ICSCalendar from "./calendars/ICSCalendar";
 import CalDAVCalendar from "./calendars/CalDAVCalendar";
+import { GoogleAuthService } from "./auth/GoogleAuth";
+import GoogleCalendar from "./calendars/GoogleCalendar";
 
 export default class FullCalendarPlugin extends Plugin {
     settings: FullCalendarSettings = DEFAULT_SETTINGS;
+    googleAuth: GoogleAuthService | null = null;
     cache: EventCache = new EventCache({
         local: (info) =>
             info.type === "local"
@@ -55,6 +58,15 @@ export default class FullCalendarPlugin extends Plugin {
                       info.homeUrl
                   )
                 : null,
+        gcal: (info) =>
+            info.type === "gcal" && this.googleAuth
+                ? new GoogleCalendar(
+                      info.color,
+                      info.name,
+                      info.calendarId,
+                      this.googleAuth
+                  )
+                : null,
         FOR_TEST_ONLY: () => null,
     });
 
@@ -77,8 +89,33 @@ export default class FullCalendarPlugin extends Plugin {
             );
         }
     }
+    initGoogleAuth() {
+        const tokens = this.settings.googleRefreshToken
+            ? {
+                  accessToken: this.settings.googleAccessToken || "",
+                  refreshToken: this.settings.googleRefreshToken,
+                  expiresAt: this.settings.googleTokenExpiry || 0,
+              }
+            : null;
+
+        this.googleAuth = new GoogleAuthService(
+            {
+                clientId: this.settings.googleClientId,
+                clientSecret: this.settings.googleClientSecret,
+            },
+            tokens,
+            async (newTokens) => {
+                this.settings.googleAccessToken = newTokens.accessToken;
+                this.settings.googleRefreshToken = newTokens.refreshToken;
+                this.settings.googleTokenExpiry = newTokens.expiresAt;
+                await this.saveData(this.settings);
+            }
+        );
+    }
+
     async onload() {
         await this.loadSettings();
+        this.initGoogleAuth();
 
         this.cache.reset(this.settings.calendarSources);
 

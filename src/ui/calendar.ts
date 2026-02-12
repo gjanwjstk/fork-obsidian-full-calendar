@@ -54,6 +54,8 @@ interface ExtraRenderProps {
     ) => Promise<void>;
     toggleTask?: (event: EventApi, isComplete: boolean) => Promise<boolean>;
     forceNarrow?: boolean;
+    slotMinTime?: string;
+    slotMaxTime?: string;
 }
 
 export function renderCalendar(
@@ -108,6 +110,8 @@ export function renderCalendar(
         nowIndicator: true,
         scrollTimeReset: false,
         dayMaxEvents: true,
+        slotMinTime: settings?.slotMinTime || "00:00:00",
+        slotMaxTime: settings?.slotMaxTime || "24:00:00",
 
         headerToolbar: !isNarrow
             ? {

@@ -1,6 +1,7 @@
 import { Notice } from "obsidian";
 import * as React from "react";
 import { EditableCalendar } from "src/calendars/EditableCalendar";
+import GoogleCalendar from "src/calendars/GoogleCalendar";
 import FullCalendarPlugin from "src/main";
 import { OFCEvent } from "src/types";
 import { openFileForEvent } from "./actions";
@@ -12,7 +13,10 @@ export function launchCreateModal(
     partialEvent: Partial<OFCEvent>
 ) {
     const calendars = [...plugin.cache.calendars.entries()]
-        .filter(([_, cal]) => cal instanceof EditableCalendar)
+        .filter(
+            ([_, cal]) =>
+                cal instanceof EditableCalendar || cal instanceof GoogleCalendar
+        )
         .map(([id, cal]) => {
             return {
                 id,
@@ -46,10 +50,13 @@ export function launchEditModal(plugin: FullCalendarPlugin, eventId: string) {
     if (!eventToEdit) {
         throw new Error("Cannot edit event that doesn't exist.");
     }
-    const calId = plugin.cache.getInfoForEditableEvent(eventId).calendar.id;
+    const calId = plugin.cache.getWritableCalendarForEvent(eventId).id;
 
     const calendars = [...plugin.cache.calendars.entries()]
-        .filter(([_, cal]) => cal instanceof EditableCalendar)
+        .filter(
+            ([_, cal]) =>
+                cal instanceof EditableCalendar || cal instanceof GoogleCalendar
+        )
         .map(([id, cal]) => {
             return {
                 id,
@@ -59,6 +66,8 @@ export function launchEditModal(plugin: FullCalendarPlugin, eventId: string) {
         });
 
     const calIdx = calendars.findIndex(({ id }) => id === calId);
+    const isGoogleCalEvent =
+        plugin.cache.getCalendarById(calId) instanceof GoogleCalendar;
 
     new ReactModal(plugin.app, async (closeModal) =>
         React.createElement(EditEvent, {
@@ -82,9 +91,12 @@ export function launchEditModal(plugin: FullCalendarPlugin, eventId: string) {
                 }
                 closeModal();
             },
-            open: async () => {
-                openFileForEvent(plugin.cache, plugin.app, eventId);
-            },
+            // Google Calendar events don't have a note file in the Vault
+            open: isGoogleCalEvent
+                ? undefined
+                : async () => {
+                      openFileForEvent(plugin.cache, plugin.app, eventId);
+                  },
             deleteEvent: async () => {
                 try {
                     await plugin.cache.deleteEvent(eventId);

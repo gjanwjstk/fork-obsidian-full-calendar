@@ -1,5 +1,10 @@
-#!/bin/sh
+#!/usr/bin/env sh
 . "$(dirname "$0")/_/husky.sh"
 
-npm run lint
-npm run compile
+# Resolve repo root from hook location (more reliable on Windows)
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT" || exit 1
+
+# Use node to run CLI tools directly (avoids npm PATH issues on Windows)
+node "$ROOT/node_modules/prettier/bin-prettier.js" --check 'src/**/*.ts*' || exit 1
+node "$ROOT/node_modules/typescript/bin/tsc" -noEmit --skipLibCheck || exit 1

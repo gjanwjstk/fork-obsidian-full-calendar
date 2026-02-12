@@ -13,6 +13,11 @@ const calendarOptionsSchema = z.discriminatedUnion("type", [
         username: z.string(),
         password: z.string(),
     }),
+    z.object({
+        type: z.literal("gcal"),
+        calendarId: z.string(),
+        name: z.string(),
+    }),
 ]);
 
 const colorValidator = z.object({ color: z.string() });
@@ -54,7 +59,7 @@ export function safeParseCalendarInfo(obj: unknown): CalendarInfo | null {
  * Construct a partial calendar source of the specified type
  */
 export function makeDefaultPartialCalendarSource(
-    type: CalendarInfo["type"] | "icloud"
+    type: CalendarInfo["type"] | "icloud" | "gcal"
 ): Partial<CalendarInfo> {
     if (type === "icloud") {
         return {
@@ -67,7 +72,7 @@ export function makeDefaultPartialCalendarSource(
     }
 
     return {
-        type: type,
+        type: type as CalendarInfo["type"],
         color: getComputedStyle(document.body)
             .getPropertyValue("--interactive-accent")
             .trim(),

@@ -16,6 +16,7 @@ import { createElement } from "react";
 import { getDailyNoteSettings } from "obsidian-daily-notes-interface";
 import ReactModal from "./ReactModal";
 import { importCalendars } from "src/calendars/parsing/caldav/import";
+import { GoogleAuthService } from "../auth/GoogleAuth";
 
 export interface FullCalendarSettings {
     calendarSources: CalendarInfo[];
@@ -27,6 +28,13 @@ export interface FullCalendarSettings {
     };
     timeFormat24h: boolean;
     clickToCreateEventFromMonthView: boolean;
+    slotMinTime: string;
+    slotMaxTime: string;
+    googleClientId: string;
+    googleClientSecret: string;
+    googleRefreshToken: string;
+    googleAccessToken: string;
+    googleTokenExpiry: number;
 }
 
 export const DEFAULT_SETTINGS: FullCalendarSettings = {
@@ -39,6 +47,13 @@ export const DEFAULT_SETTINGS: FullCalendarSettings = {
     },
     timeFormat24h: false,
     clickToCreateEventFromMonthView: true,
+    slotMinTime: "00:00:00",
+    slotMaxTime: "24:00:00",
+    googleClientId: "",
+    googleClientSecret: "",
+    googleRefreshToken: "",
+    googleAccessToken: "",
+    googleTokenExpiry: 0,
 };
 
 const WEEKDAYS = [
@@ -50,6 +65,14 @@ const WEEKDAYS = [
     "Friday",
     "Saturday",
 ];
+
+const TIME_OPTIONS: Record<string, string> = {};
+for (let h = 0; h <= 24; h++) {
+    const val = `${h.toString().padStart(2, "0")}:00:00`;
+    const label =
+        h === 24 ? "24:00 (Midnight)" : `${h.toString().padStart(2, "0")}:00`;
+    TIME_OPTIONS[val] = label;
+}
 
 const INITIAL_VIEW_OPTIONS = {
     DESKTOP: {
@@ -89,6 +112,7 @@ export function addCalendarButton(
                     icloud: "iCloud",
                     caldav: "CalDAV",
                     ical: "Remote (.ics format)",
+                    gcal: "Google Calendar",
                 }))
         )
         .addExtraButton((button) => {
@@ -124,6 +148,31 @@ export function addCalendarButton(
                         }
                     }
 
+                    // Fetch Google Calendar list if the selected type is gcal
+                    let googleCalendars: Array<{
+                        id: string;
+                        summary: string;
+                        primary: boolean;
+                    }> = [];
+                    const selectedType = dropdown.getValue();
+                    if (
+                        selectedType === "gcal" &&
+                        plugin.googleAuth?.isAuthenticated
+                    ) {
+                        try {
+                            googleCalendars =
+                                await plugin.googleAuth.listCalendars();
+                        } catch (e) {
+                            console.error(
+                                "Failed to fetch Google Calendar list:",
+                                e
+                            );
+                            new Notice(
+                                "Failed to fetch Google Calendar list. Please check your authorization."
+                            );
+                        }
+                    }
+
                     return createElement(AddCalendarSource, {
                         source: makeDefaultPartialCalendarSource(
                             dropdown.getValue() as CalendarInfo["type"]
@@ -132,6 +181,7 @@ export function addCalendarButton(
                             (dir) => usedDirectories.indexOf(dir) === -1
                         ),
                         headings,
+                        googleCalendars,
                         submit: async (source: CalendarInfo) => {
                             if (source.type === "caldav") {
                                 try {
@@ -245,6 +295,114 @@ export class FullCalendarSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                 });
             });
+
+        new Setting(containerEl)
+            .setName("Visible time range start")
+            .setDesc(
+                "Hide time slots before this hour (e.g. hide sleeping hours)."
+            )
+            .addDropdown((dropdown) => {
+                Object.entries(TIME_OPTIONS).forEach(([value, display]) => {
+                    dropdown.addOption(value, display);
+                });
+                dropdown.setValue(this.plugin.settings.slotMinTime);
+                dropdown.onChange(async (val) => {
+                    this.plugin.settings.slotMinTime = val;
+                    await this.plugin.saveSettings();
+                });
+            });
+
+        new Setting(containerEl)
+            .setName("Visible time range end")
+            .setDesc(
+                "Hide time slots after this hour (e.g. hide sleeping hours)."
+            )
+            .addDropdown((dropdown) => {
+                Object.entries(TIME_OPTIONS).forEach(([value, display]) => {
+                    dropdown.addOption(value, display);
+                });
+                dropdown.setValue(this.plugin.settings.slotMaxTime);
+                dropdown.onChange(async (val) => {
+                    this.plugin.settings.slotMaxTime = val;
+                    await this.plugin.saveSettings();
+                });
+            });
+
+        containerEl.createEl("h2", { text: "Google Calendar Integration" });
+        containerEl.createEl("p", {
+            text: "To use Google Calendar, create OAuth 2.0 credentials in the Google Cloud Console. Enable the Google Calendar API, create a Desktop app OAuth client, and enter the Client ID and Secret below.",
+            cls: "setting-item-description",
+        });
+
+        new Setting(containerEl)
+            .setName("Google Client ID")
+            .setDesc("OAuth 2.0 Client ID from Google Cloud Console.")
+            .addText((text) => {
+                text.setPlaceholder("your-client-id.apps.googleusercontent.com")
+                    .setValue(this.plugin.settings.googleClientId)
+                    .onChange(async (val) => {
+                        this.plugin.settings.googleClientId = val;
+                        await this.plugin.saveData(this.plugin.settings);
+                    });
+                text.inputEl.style.width = "300px";
+            });
+
+        new Setting(containerEl)
+            .setName("Google Client Secret")
+            .setDesc("OAuth 2.0 Client Secret from Google Cloud Console.")
+            .addText((text) => {
+                text.setPlaceholder("GOCSPX-...")
+                    .setValue(this.plugin.settings.googleClientSecret)
+                    .onChange(async (val) => {
+                        this.plugin.settings.googleClientSecret = val;
+                        await this.plugin.saveData(this.plugin.settings);
+                    });
+                text.inputEl.style.width = "300px";
+                text.inputEl.type = "password";
+            });
+
+        const authStatusSetting = new Setting(containerEl)
+            .setName("Authorization Status")
+            .setDesc(
+                this.plugin.googleAuth?.isAuthenticated
+                    ? "Authorized. You can add Google Calendars below."
+                    : "Not authorized. Click the button to authorize."
+            );
+
+        if (this.plugin.googleAuth?.isAuthenticated) {
+            authStatusSetting.addButton((button) => {
+                button
+                    .setButtonText("Revoke Authorization")
+                    .setWarning()
+                    .onClick(async () => {
+                        try {
+                            await this.plugin.googleAuth?.revokeAuth();
+                            this.display();
+                        } catch (e) {
+                            if (e instanceof Error) {
+                                new Notice(e.message);
+                            }
+                        }
+                    });
+            });
+        } else {
+            authStatusSetting.addButton((button) => {
+                button
+                    .setButtonText("Authorize Google Calendar")
+                    .setCta()
+                    .onClick(async () => {
+                        try {
+                            this.plugin.initGoogleAuth();
+                            await this.plugin.googleAuth?.startAuthFlow();
+                            this.display();
+                        } catch (e) {
+                            if (e instanceof Error) {
+                                new Notice(e.message);
+                            }
+                        }
+                    });
+            });
+        }
 
         containerEl.createEl("h2", { text: "Manage Calendars" });
         addCalendarButton(

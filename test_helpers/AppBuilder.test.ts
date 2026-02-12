@@ -19,110 +19,110 @@ describe("AppBuilder read tests", () => {
             .done();
         const files = app.vault.getAllLoadedFiles();
         expect(files).toMatchInlineSnapshot(`
-		[
-		  TFolder {
-		    "children": [
-		      TFile {
-		        "name": "name.md",
-		        "parent": [Circular],
-		      },
-		    ],
-		    "name": "/",
-		    "parent": null,
-		  },
-		  TFile {
-		    "name": "name.md",
-		    "parent": TFolder {
-		      "children": [
-		        [Circular],
-		      ],
-		      "name": "/",
-		      "parent": null,
-		    },
-		  },
-		]
-	`);
-        expect(files[0].path).toMatchInlineSnapshot(`"/"`);
+            [
+              TFolder {
+                "children": [
+                  TFile {
+                    "name": "name.md",
+                    "parent": [Circular],
+                  },
+                ],
+                "name": "\\",
+                "parent": null,
+              },
+              TFile {
+                "name": "name.md",
+                "parent": TFolder {
+                  "children": [
+                    [Circular],
+                  ],
+                  "name": "\\",
+                  "parent": null,
+                },
+              },
+            ]
+        `);
+        expect(files[0].path).toMatchInlineSnapshot(`""`);
         const file = app.vault.getAbstractFileByPath("name.md");
         expect(file).toMatchInlineSnapshot(`
-		TFile {
-		  "name": "name.md",
-		  "parent": TFolder {
-		    "children": [
-		      [Circular],
-		    ],
-		    "name": "/",
-		    "parent": null,
-		  },
-		}
-	`);
+            TFile {
+              "name": "name.md",
+              "parent": TFolder {
+                "children": [
+                  [Circular],
+                ],
+                "name": "\\",
+                "parent": null,
+              },
+            }
+        `);
 
         const contents = await app.vault.read(file as TFile);
         expect(contents).toMatchInlineSnapshot(`
-		"---
-		one: 1
-		two: 2
-		---
-		## my heading
-		- list item
-		"
-	`);
+            		"---
+            		one: 1
+            		two: 2
+            		---
+            		## my heading
+            		- list item
+            		"
+        	`);
         const metadata = app.metadataCache.getFileCache(file as TFile);
         expect(metadata).toMatchInlineSnapshot(`
-		{
-		  "frontmatter": {
-		    "one": 1,
-		    "position": {
-		      "end": {
-		        "col": 3,
-		        "line": 3,
-		        "offset": 21,
-		      },
-		      "start": {
-		        "col": 0,
-		        "line": 0,
-		        "offset": 0,
-		      },
-		    },
-		    "two": 2,
-		  },
-		  "headings": [
-		    {
-		      "heading": "my heading",
-		      "level": 2,
-		      "position": {
-		        "end": {
-		          "col": 13,
-		          "line": 4,
-		          "offset": 35,
-		        },
-		        "start": {
-		          "col": 0,
-		          "line": 4,
-		          "offset": 22,
-		        },
-		      },
-		    },
-		  ],
-		  "listItems": [
-		    {
-		      "parent": -5,
-		      "position": {
-		        "end": {
-		          "col": 11,
-		          "line": 5,
-		          "offset": 47,
-		        },
-		        "start": {
-		          "col": 0,
-		          "line": 5,
-		          "offset": 36,
-		        },
-		      },
-		    },
-		  ],
-		}
-	`);
+            		{
+            		  "frontmatter": {
+            		    "one": 1,
+            		    "position": {
+            		      "end": {
+            		        "col": 3,
+            		        "line": 3,
+            		        "offset": 21,
+            		      },
+            		      "start": {
+            		        "col": 0,
+            		        "line": 0,
+            		        "offset": 0,
+            		      },
+            		    },
+            		    "two": 2,
+            		  },
+            		  "headings": [
+            		    {
+            		      "heading": "my heading",
+            		      "level": 2,
+            		      "position": {
+            		        "end": {
+            		          "col": 13,
+            		          "line": 4,
+            		          "offset": 35,
+            		        },
+            		        "start": {
+            		          "col": 0,
+            		          "line": 4,
+            		          "offset": 22,
+            		        },
+            		      },
+            		    },
+            		  ],
+            		  "listItems": [
+            		    {
+            		      "parent": -5,
+            		      "position": {
+            		        "end": {
+            		          "col": 11,
+            		          "line": 5,
+            		          "offset": 47,
+            		        },
+            		        "start": {
+            		          "col": 0,
+            		          "line": 5,
+            		          "offset": 36,
+            		        },
+            		      },
+            		    },
+            		  ],
+            		}
+        	`);
     });
     it("multiple files", async () => {
         const app = builder
@@ -165,31 +165,31 @@ describe("AppBuilder read tests", () => {
             await app.vault.read(rootFile),
             app.metadataCache.getFileCache(rootFile),
         ]).toMatchInlineSnapshot(`
-		[
-		  "## Root
-		",
-		  {
-		    "headings": [
-		      {
-		        "heading": "Root",
-		        "level": 2,
-		        "position": {
-		          "end": {
-		            "col": 7,
-		            "line": 0,
-		            "offset": 7,
-		          },
-		          "start": {
-		            "col": 0,
-		            "line": 0,
-		            "offset": 0,
-		          },
-		        },
-		      },
-		    ],
-		  },
-		]
-	`);
+            		[
+            		  "## Root
+            		",
+            		  {
+            		    "headings": [
+            		      {
+            		        "heading": "Root",
+            		        "level": 2,
+            		        "position": {
+            		          "end": {
+            		            "col": 7,
+            		            "line": 0,
+            		            "offset": 7,
+            		          },
+            		          "start": {
+            		            "col": 0,
+            		            "line": 0,
+            		            "offset": 0,
+            		          },
+            		        },
+            		      },
+            		    ],
+            		  },
+            		]
+        	`);
         const nestedFile = app.vault.getAbstractFileByPath(
             "nested/nestedfile.md"
         ) as TFile;
@@ -198,31 +198,31 @@ describe("AppBuilder read tests", () => {
             await app.vault.read(nestedFile),
             app.metadataCache.getFileCache(nestedFile),
         ]).toMatchInlineSnapshot(`
-		[
-		  "## Nested
-		",
-		  {
-		    "headings": [
-		      {
-		        "heading": "Nested",
-		        "level": 2,
-		        "position": {
-		          "end": {
-		            "col": 9,
-		            "line": 0,
-		            "offset": 9,
-		          },
-		          "start": {
-		            "col": 0,
-		            "line": 0,
-		            "offset": 0,
-		          },
-		        },
-		      },
-		    ],
-		  },
-		]
-	`);
+            		[
+            		  "## Nested
+            		",
+            		  {
+            		    "headings": [
+            		      {
+            		        "heading": "Nested",
+            		        "level": 2,
+            		        "position": {
+            		          "end": {
+            		            "col": 9,
+            		            "line": 0,
+            		            "offset": 9,
+            		          },
+            		          "start": {
+            		            "col": 0,
+            		            "line": 0,
+            		            "offset": 0,
+            		          },
+            		        },
+            		      },
+            		    ],
+            		  },
+            		]
+        	`);
     });
     it("nested a few", async () => {
         const app = builder
@@ -243,15 +243,15 @@ describe("AppBuilder read tests", () => {
             .done();
         const files = app.vault.getAllLoadedFiles();
         expect(files.map((f) => f.path)).toMatchInlineSnapshot(`
-		[
-		  "/",
-		  "root.md",
-		  "nested",
-		  "nested/nestedfile.md",
-		  "nested/double",
-		  "nested/double/double.md",
-		]
-	`);
+            [
+              "",
+              "root.md",
+              "nested",
+              "nested/nestedfile.md",
+              "nested/double",
+              "nested/double/double.md",
+            ]
+        `);
         const nestedFile = app.vault.getAbstractFileByPath(
             "nested/double/double.md"
         ) as TFile;
@@ -261,60 +261,60 @@ describe("AppBuilder read tests", () => {
             await app.vault.read(nestedFile),
             app.metadataCache.getFileCache(nestedFile),
         ]).toMatchInlineSnapshot(`
-		[
-		  TFile {
-		    "name": "double.md",
-		    "parent": TFolder {
-		      "children": [
-		        [Circular],
-		      ],
-		      "name": "/double",
-		      "parent": TFolder {
-		        "children": [
-		          TFile {
-		            "name": "nestedfile.md",
-		            "parent": [Circular],
-		          },
-		          [Circular],
-		        ],
-		        "name": "/nested",
-		        "parent": TFolder {
-		          "children": [
-		            TFile {
-		              "name": "root.md",
-		              "parent": [Circular],
-		            },
-		            [Circular],
-		          ],
-		          "name": "/",
-		          "parent": null,
-		        },
-		      },
-		    },
-		  },
-		  "## Double
-		",
-		  {
-		    "headings": [
-		      {
-		        "heading": "Double",
-		        "level": 2,
-		        "position": {
-		          "end": {
-		            "col": 9,
-		            "line": 0,
-		            "offset": 9,
-		          },
-		          "start": {
-		            "col": 0,
-		            "line": 0,
-		            "offset": 0,
-		          },
-		        },
-		      },
-		    ],
-		  },
-		]
-	`);
+            [
+              TFile {
+                "name": "double.md",
+                "parent": TFolder {
+                  "children": [
+                    [Circular],
+                  ],
+                  "name": "\\double",
+                  "parent": TFolder {
+                    "children": [
+                      TFile {
+                        "name": "nestedfile.md",
+                        "parent": [Circular],
+                      },
+                      [Circular],
+                    ],
+                    "name": "\\nested",
+                    "parent": TFolder {
+                      "children": [
+                        TFile {
+                          "name": "root.md",
+                          "parent": [Circular],
+                        },
+                        [Circular],
+                      ],
+                      "name": "\\",
+                      "parent": null,
+                    },
+                  },
+                },
+              },
+              "## Double
+            ",
+              {
+                "headings": [
+                  {
+                    "heading": "Double",
+                    "level": 2,
+                    "position": {
+                      "end": {
+                        "col": 9,
+                        "line": 0,
+                        "offset": 9,
+                      },
+                      "start": {
+                        "col": 0,
+                        "line": 0,
+                        "offset": 0,
+                      },
+                    },
+                  },
+                ],
+              },
+            ]
+        `);
     });
 });

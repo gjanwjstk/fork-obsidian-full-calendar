@@ -5,6 +5,7 @@ import {
     FileManager,
     MetadataCache,
     TAbstractFile,
+    TFolder,
     TFile,
     Vault,
 } from "obsidian";
@@ -15,6 +16,11 @@ import {
  * Obsidian API in unit tests.
  */
 export interface ObsidianInterface {
+    /**
+     * Get the vault root folder. Use when path is "" or "/".
+     */
+    getRoot(): TFolder;
+
     /**
      * @param path path to get the file for.
      * Get a file/folder from the Vault. Returns null if file doesn't exist.
@@ -150,6 +156,10 @@ export class ObsidianIO implements ObsidianInterface {
 
     create(path: string, contents: string): Promise<TFile> {
         return this.vault.create(path, contents);
+    }
+
+    getRoot(): TFolder {
+        return this.vault.getRoot();
     }
 
     getAbstractFileByPath(path: string): TAbstractFile | null {

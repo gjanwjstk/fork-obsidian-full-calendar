@@ -20,6 +20,7 @@ async function assertFailed(func: () => Promise<any>, message: RegExp) {
 }
 
 const makeApp = (app: MockApp): ObsidianInterface => ({
+    getRoot: () => app.vault.getRoot(),
     getAbstractFileByPath: (path) => app.vault.getAbstractFileByPath(path),
     getFileByPath(path: string): TFile | null {
         const f = app.vault.getAbstractFileByPath(path);
@@ -257,13 +258,13 @@ describe("Note Calendar Tests", () => {
         );
         // TODO: make the third param a mock that we can inspect
         const newLoc = mockFn.mock.calls[0][0];
-        expect(newLoc.file.path).toBe(join("events", filename));
+        expect(newLoc.file.path).toBe(`${dirName}/${filename}`);
         expect(newLoc.lineNumber).toBeUndefined();
 
         expect(obsidian.rewrite).toHaveReturnedTimes(1);
         const [file, rewriteCallback] = (obsidian.rewrite as jest.Mock).mock
             .calls[0];
-        expect(file.path).toBe(join("events", filename));
+        expect(file.path).toBe(`${dirName}/${filename}`);
 
         expect(rewriteCallback(contents)).toMatchInlineSnapshot(`
             "---

@@ -7,7 +7,15 @@ import {
     TFolder,
     Vault,
 } from "obsidian";
-import { basename, dirname, join, normalize } from "path";
+import { basename, dirname, join } from "path";
+
+/** Obsidian vault 경로 정규화 (항상 forward slash) */
+function normalizeVaultPath(path: string): string {
+    return path
+        .replace(/\\/g, "/")
+        .replace(/\/+/g, "/")
+        .replace(/^\//, "");
+}
 
 /**
  * Return all files that exist under a given folder.
@@ -46,10 +54,10 @@ export class MockVault implements Vault {
     }
 
     getAbstractFileByPath(path: string): TAbstractFile | null {
-        const normalizedPath = join("/", normalize(path));
+        const normalizedPath = normalizeVaultPath(path) || "";
         return (
             this.getAllLoadedFiles().find(
-                (f) => join("/", normalize(f.path)) === normalizedPath
+                (f) => normalizeVaultPath(f.path) === normalizedPath
             ) || null
         );
     }

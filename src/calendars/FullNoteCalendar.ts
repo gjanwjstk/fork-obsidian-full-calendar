@@ -19,6 +19,25 @@ const basenameFromEvent = (event: OFCEvent): string => {
 
 const filenameForEvent = (event: OFCEvent) => `${basenameFromEvent(event)}.md`;
 
+/**
+ * Obsidian vault 경로 정규화. Obsidian vault는 항상 forward slash를 사용함.
+ * - 백슬래시를 슬래시로 변환 (Windows 호환)
+ * - 중복 슬래시 제거
+ * - 선행 슬래시 제거 (getFileByPath 등 vault API 호환)
+ */
+function normalizeVaultPath(path: string): string {
+    return path.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\//, "");
+}
+
+/**
+ * directory와 filename을 결합. directory가 "" 또는 "/"인 경우 filename만 반환.
+ */
+function joinVaultPath(directory: string, filename: string): string {
+    const dir = normalizeVaultPath(directory);
+    if (!dir) return filename;
+    return normalizeVaultPath(`${dir}/${filename}`);
+}
+
 const FRONTMATTER_SEPARATOR = "---";
 
 /**
@@ -198,7 +217,10 @@ export default class FullNoteCalendar extends EditableCalendar {
     }
 
     async getEvents(): Promise<EditableEventResponse[]> {
-        const eventFolder = this.app.getAbstractFileByPath(this.directory);
+        const dirPath = normalizeVaultPath(this.directory) || "";
+        const eventFolder = dirPath
+            ? this.app.getAbstractFileByPath(dirPath)
+            : this.app.getRoot();
         if (!eventFolder) {
             throw new Error(`Cannot get folder ${this.directory}`);
         }
@@ -216,7 +238,7 @@ export default class FullNoteCalendar extends EditableCalendar {
     }
 
     async createEvent(event: OFCEvent): Promise<EventLocation> {
-        const path = `${this.directory}/${filenameForEvent(event)}`;
+        const path = joinVaultPath(this.directory, filenameForEvent(event));
         if (this.app.getAbstractFileByPath(path)) {
             throw new Error(`Event at ${path} already exists.`);
         }
@@ -232,14 +254,18 @@ export default class FullNoteCalendar extends EditableCalendar {
         if (lineNumber !== undefined) {
             throw new Error("Note calendar cannot handle inline events.");
         }
-        const file = this.app.getFileByPath(path);
+        const normalizedPath = normalizeVaultPath(path);
+        const file = this.app.getFileByPath(normalizedPath);
         if (!file) {
             throw new Error(
-                `File ${path} either doesn't exist or is a folder.`
+                `File ${normalizedPath} either doesn't exist or is a folder.`
             );
         }
 
-        const updatedPath = `${file.parent.path}/${filenameForEvent(event)}`;
+        const updatedPath = joinVaultPath(
+            file.parent.path,
+            filenameForEvent(event)
+        );
         return { file: { path: updatedPath }, lineNumber: undefined };
     }
 
@@ -249,7 +275,8 @@ export default class FullNoteCalendar extends EditableCalendar {
         updateCacheWithLocation: (loc: EventLocation) => void
     ): Promise<void> {
         const { path } = location;
-        const file = this.app.getFileByPath(path);
+        const normalizedPath = normalizeVaultPath(path);
+        const file = this.app.getFileByPath(normalizedPath);
         if (!file) {
             throw new Error(
                 `File ${path} either doesn't exist or is a folder.`
@@ -283,12 +310,13 @@ export default class FullNoteCalendar extends EditableCalendar {
                 `Event cannot be moved to a note calendar from a calendar of type ${toCalendar.type}.`
             );
         }
-        const file = this.app.getFileByPath(path);
+        const normalizedPath = normalizeVaultPath(path);
+        const file = this.app.getFileByPath(normalizedPath);
         if (!file) {
-            throw new Error(`File ${path} not found.`);
+            throw new Error(`File ${normalizedPath} not found.`);
         }
         const destDir = toCalendar.directory;
-        const newPath = `${destDir}/${file.name}`;
+        const newPath = joinVaultPath(destDir, file.name);
         updateCacheWithLocation({
             file: { path: newPath },
             lineNumber: undefined,
@@ -300,9 +328,10 @@ export default class FullNoteCalendar extends EditableCalendar {
         if (lineNumber !== undefined) {
             throw new Error("Note calendar cannot handle inline events.");
         }
-        const file = this.app.getFileByPath(path);
+        const normalizedPath = normalizeVaultPath(path);
+        const file = this.app.getFileByPath(normalizedPath);
         if (!file) {
-            throw new Error(`File ${path} not found.`);
+            throw new Error(`File ${normalizedPath} not found.`);
         }
         return this.app.delete(file);
     }

@@ -1,4 +1,14 @@
-import { basename, extname, join as pathJoin } from "path";
+import { basename, extname } from "path";
+
+/** Obsidian vault는 항상 forward slash를 사용함 (OS 무관) */
+function joinVaultPath(...parts: string[]): string {
+    return parts
+        .map((p) => p.replace(/\\/g, "/"))
+        .filter((p) => p.length > 0)
+        .join("/")
+        .replace(/\/+/g, "/")
+        .replace(/^\//, "");
+}
 
 /** Basic obsidian abstraction for any file or folder in a vault. */
 export abstract class TAbstractFile {
@@ -7,12 +17,7 @@ export abstract class TAbstractFile {
      */
     get path(): string {
         const parentPath = this.parent?.path || "";
-        const path = pathJoin(parentPath, this.name);
-        if (path.startsWith("/") && path.length > 1) {
-            return path.slice(1);
-        } else {
-            return path;
-        }
+        return joinVaultPath(parentPath, this.name);
     }
     /**
      * @public

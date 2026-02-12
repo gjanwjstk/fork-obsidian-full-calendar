@@ -230,6 +230,12 @@ export function toEventInput(
         }
     }
 
+    // 일정별 색상: 이벤트에 color가 있으면 개별 색 적용
+    if (frontmatter.color) {
+        event.backgroundColor = frontmatter.color;
+        event.borderColor = frontmatter.color;
+    }
+
     return event;
 }
 
@@ -237,8 +243,12 @@ export function fromEventApi(event: EventApi): OFCEvent {
     const isRecurring: boolean = event.extendedProps.daysOfWeek !== undefined;
     const startDate = getDate(event.start as Date);
     const endDate = getDate(event.end as Date);
+    const eventColor =
+        (event as EventApi & { backgroundColor?: string }).backgroundColor ??
+        event.extendedProps?.eventColor;
     return {
         title: event.title,
+        ...(eventColor ? { color: eventColor } : {}),
         ...(event.allDay
             ? { allDay: true }
             : {

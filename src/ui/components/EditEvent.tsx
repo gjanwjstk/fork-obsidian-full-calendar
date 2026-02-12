@@ -139,6 +139,17 @@ export const EditEvent = ({
 
     const [calendarIndex, setCalendarIndex] = useState(defaultCalendarIndex);
 
+    const defaultEventColor =
+        typeof document !== "undefined"
+            ? getComputedStyle(document.body)
+                  .getPropertyValue("--interactive-accent")
+                  .trim() || "#808080"
+            : "#808080";
+    const [eventColor, setEventColor] = useState(
+        initialEvent?.color || defaultEventColor
+    );
+    const [useCustomColor, setUseCustomColor] = useState(!!initialEvent?.color);
+
     const [complete, setComplete] = useState(
         initialEvent?.type === "single" &&
             initialEvent.completed !== null &&
@@ -165,6 +176,11 @@ export const EditEvent = ({
         await submit(
             {
                 ...{ title },
+                ...(useCustomColor
+                    ? { color: eventColor }
+                    : initialEvent?.color
+                    ? { color: null }
+                    : {}),
                 ...(allDay
                     ? { allDay: true }
                     : { allDay: false, startTime: startTime || "", endTime }),
@@ -341,6 +357,29 @@ export const EditEvent = ({
                         }}
                         type="checkbox"
                     />
+                </p>
+                <p>
+                    <label htmlFor="customColor">Custom event color </label>
+                    <input
+                        id="customColor"
+                        type="checkbox"
+                        checked={useCustomColor}
+                        onChange={(e) => setUseCustomColor(e.target.checked)}
+                    />
+                    {useCustomColor && (
+                        <input
+                            type="color"
+                            value={eventColor}
+                            onChange={(e) => setEventColor(e.target.value)}
+                            style={{
+                                marginLeft: "0.5rem",
+                                width: "2rem",
+                                height: "1.5rem",
+                                padding: 0,
+                                border: "none",
+                            }}
+                        />
+                    )}
                 </p>
 
                 {isTask && (

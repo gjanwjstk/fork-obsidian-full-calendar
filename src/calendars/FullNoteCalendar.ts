@@ -81,7 +81,7 @@ function replaceFrontmatter(page: string, newFrontmatter: string): string {
     return `---\n${newFrontmatter}---${extractPageContents(page)}`;
 }
 
-type PrintableAtom = Array<number | string> | number | string | boolean;
+type PrintableAtom = Array<number | string> | number | string | boolean | null;
 
 function stringifyYamlAtom(v: PrintableAtom): string {
     let result = "";
@@ -140,8 +140,10 @@ function modifyFrontmatterString(
             }
             const key = keys[0];
             linesAdded.add(key);
-            const newVal: PrintableAtom | undefined = modifications[key];
-            if (newVal !== undefined) {
+            const newVal: PrintableAtom | undefined | null = modifications[key];
+            if (newVal === null && key === "color") {
+                // Explicitly remove color field (revert to calendar default)
+            } else if (newVal !== undefined) {
                 newFrontmatter.push(stringifyYamlLine(key, newVal));
             } else {
                 // Just push the old line if we don't have a modification.
@@ -153,7 +155,11 @@ function modifyFrontmatterString(
         newFrontmatter.push(
             ...(Object.keys(modifications) as [keyof OFCEvent])
                 .filter((k) => !linesAdded.has(k))
-                .filter((k) => modifications[k] !== undefined)
+                .filter(
+                    (k) =>
+                        modifications[k] !== undefined &&
+                        !(k === "color" && modifications[k] === null)
+                )
                 .map((k) =>
                     stringifyYamlLine(k, modifications[k] as PrintableAtom)
                 )

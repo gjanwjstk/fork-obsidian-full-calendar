@@ -3,6 +3,7 @@ import * as React from "react";
 import { SetStateAction, useState } from "react";
 
 import { CalendarInfo } from "../../types";
+import { toHexForColorInput } from "../../colorUtils";
 
 type SourceWith<T extends Partial<CalendarInfo>, K> = T extends K ? T : never;
 
@@ -145,7 +146,7 @@ export const CalendarSettingRow = ({
             <input
                 style={{ maxWidth: "25%", minWidth: "3rem" }}
                 type="color"
-                value={setting.color}
+                value={toHexForColorInput(setting.color)}
                 onChange={(e) => onColorChange(e.target.value)}
             />
         </div>

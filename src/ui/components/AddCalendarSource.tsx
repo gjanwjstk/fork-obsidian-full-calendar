@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useState } from "react";
 import { CalendarInfo } from "../../types";
+import { toHexForColorInput } from "../../colorUtils";
 
 type ChangeListener = <T extends Partial<CalendarInfo>>(
     fromString: (val: string) => T
@@ -74,7 +75,7 @@ function ColorPicker<T extends Partial<CalendarInfo>>({
                 <input
                     required
                     type="color"
-                    value={source.color}
+                    value={toHexForColorInput(source.color)}
                     style={{ maxWidth: "25%", minWidth: "3rem" }}
                     onChange={changeListener((x) => ({ ...source, color: x }))}
                 />

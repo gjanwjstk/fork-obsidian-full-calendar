@@ -20,6 +20,24 @@ const basenameFromEvent = (event: OFCEvent): string => {
 const filenameForEvent = (event: OFCEvent) => `${basenameFromEvent(event)}.md`;
 
 /**
+ * 디렉터리 내에 baseFilename 또는 baseFilename 2, 3... 중 존재하지 않는 경로 반환.
+ */
+function getUniquePathInDir(
+    app: ObsidianInterface,
+    directory: string,
+    baseFilename: string
+): string {
+    let path = joinVaultPath(directory, baseFilename);
+    let suffix = 2;
+    const baseNameWithoutExt = baseFilename.replace(/\.md$/, "");
+    while (app.getAbstractFileByPath(path)) {
+        path = joinVaultPath(directory, `${baseNameWithoutExt} ${suffix}.md`);
+        suffix += 1;
+    }
+    return path;
+}
+
+/**
  * Obsidian vault 경로 정규화. Obsidian vault는 항상 forward slash를 사용함.
  * - 백슬래시를 슬래시로 변환 (Windows 호환)
  * - 중복 슬래시 제거
@@ -91,7 +109,8 @@ function stringifyYamlAtom(v: PrintableAtom): string {
         result += "]";
     } else if (typeof v === "string" && v.startsWith("#")) {
         // YAML에서 #은 주석 시작. hex 색상(#RRGGBB)은 따옴표로 감싸야 함.
-        result += `"${v}"`;
+        // 이중 따옴표는 이스케이프 해석으로 "Unexpected scalar" 오류 발생. 단일 따옴표 사용.
+        result += `'${v}'`;
     } else {
         result += `${v}`;
     }
@@ -103,6 +122,17 @@ function stringifyYamlLine(
     v: PrintableAtom
 ): string {
     return `${String(k)}: ${stringifyYamlAtom(v)}`;
+}
+
+/**
+ * parseYaml이 "color: "#RRGGBB"" 형식에서 "Unexpected scalar" 오류를 일으킴.
+ * 이중 따옴표 hex를 단일 따옴표로 변환하여 파싱 가능하게 함.
+ */
+function normalizeYamlLineForParsing(line: string): string {
+    return line.replace(
+        /^(\s*\S+\s*:\s*)"(#[0-9A-Fa-f]{3,8})"(\s*)$/,
+        "$1'$2'$3"
+    );
 }
 
 function newFrontmatter(fields: Partial<OFCEvent>): string {
@@ -132,7 +162,8 @@ function modifyFrontmatterString(
         // Modify rows in-place.
         for (let i = 0; i < frontmatter.length; i++) {
             const line: string = frontmatter[i];
-            const obj: Record<any, any> | null = parseYaml(line);
+            const normalizedLine = normalizeYamlLineForParsing(line);
+            const obj: Record<any, any> | null = parseYaml(normalizedLine);
             if (!obj) {
                 continue;
             }
@@ -149,8 +180,8 @@ function modifyFrontmatterString(
             } else if (newVal !== undefined) {
                 newFrontmatter.push(stringifyYamlLine(key, newVal));
             } else {
-                // Just push the old line if we don't have a modification.
-                newFrontmatter.push(line);
+                // Keep normalized line (fixes double-quoted hex colors on next save)
+                newFrontmatter.push(normalizedLine);
             }
         }
 
@@ -247,9 +278,16 @@ export default class FullNoteCalendar extends EditableCalendar {
     }
 
     async createEvent(event: OFCEvent): Promise<EventLocation> {
-        const path = joinVaultPath(this.directory, filenameForEvent(event));
-        if (this.app.getAbstractFileByPath(path)) {
-            throw new Error(`Event at ${path} already exists.`);
+        const baseFilename = filenameForEvent(event);
+        let path = joinVaultPath(this.directory, baseFilename);
+        let suffix = 2;
+        const baseNameWithoutExt = baseFilename.replace(/\.md$/, "");
+        while (this.app.getAbstractFileByPath(path)) {
+            path = joinVaultPath(
+                this.directory,
+                `${baseNameWithoutExt} ${suffix}.md`
+            );
+            suffix += 1;
         }
         const file = await this.app.create(path, newFrontmatter(event));
         return { file, lineNumber: undefined };
@@ -291,14 +329,24 @@ export default class FullNoteCalendar extends EditableCalendar {
                 `File ${path} either doesn't exist or is a folder.`
             );
         }
-        const newLocation = this.getNewLocation(location, event);
+        let newLocation = this.getNewLocation(location, event);
 
-        updateCacheWithLocation(newLocation);
-
+        let fileToRewrite = file;
         if (file.path !== newLocation.file.path) {
-            await this.app.rename(file, newLocation.file.path);
+            const targetPath = getUniquePathInDir(
+                this.app,
+                file.parent.path,
+                filenameForEvent(event)
+            );
+            newLocation = { file: { path: targetPath }, lineNumber: undefined };
+            updateCacheWithLocation(newLocation);
+            await this.app.rename(file, targetPath);
+            const renamed = this.app.getFileByPath(targetPath);
+            if (renamed) fileToRewrite = renamed;
+        } else {
+            updateCacheWithLocation(newLocation);
         }
-        await this.app.rewrite(file, (page) =>
+        await this.app.rewrite(fileToRewrite, (page) =>
             modifyFrontmatterString(page, event)
         );
 
@@ -325,7 +373,7 @@ export default class FullNoteCalendar extends EditableCalendar {
             throw new Error(`File ${normalizedPath} not found.`);
         }
         const destDir = toCalendar.directory;
-        const newPath = joinVaultPath(destDir, file.name);
+        const newPath = getUniquePathInDir(this.app, destDir, file.name);
         updateCacheWithLocation({
             file: { path: newPath },
             lineNumber: undefined,

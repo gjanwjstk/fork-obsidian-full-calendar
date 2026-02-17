@@ -19,8 +19,10 @@ import FullNoteCalendar from "./calendars/FullNoteCalendar";
 import DailyNoteCalendar from "./calendars/DailyNoteCalendar";
 import ICSCalendar from "./calendars/ICSCalendar";
 import CalDAVCalendar from "./calendars/CalDAVCalendar";
-import { GoogleAuthService } from "./auth/GoogleAuth";
+import { GoogleAuthService, GoogleTokens } from "./auth/GoogleAuth";
 import GoogleCalendar from "./calendars/GoogleCalendar";
+
+const GOOGLE_TOKENS_SECRET_KEY = "full-calendar-google-oauth-tokens";
 
 export default class FullCalendarPlugin extends Plugin {
     settings: FullCalendarSettings = DEFAULT_SETTINGS;
@@ -89,14 +91,84 @@ export default class FullCalendarPlugin extends Plugin {
             );
         }
     }
-    initGoogleAuth() {
-        const tokens = this.settings.googleRefreshToken
-            ? {
-                  accessToken: this.settings.googleAccessToken || "",
-                  refreshToken: this.settings.googleRefreshToken,
-                  expiresAt: this.settings.googleTokenExpiry || 0,
-              }
-            : null;
+    private async loadGoogleTokensFromStorage(): Promise<GoogleTokens | null> {
+        const storage = (
+            this.app as {
+                secretStorage?: { getSecret?: (k: string) => string | null };
+            }
+        ).secretStorage;
+        if (!storage?.getSecret) return null;
+        try {
+            const raw = storage.getSecret(GOOGLE_TOKENS_SECRET_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw) as GoogleTokens;
+            return parsed?.refreshToken ? parsed : null;
+        } catch {
+            return null;
+        }
+    }
+
+    private async saveGoogleTokensToStorage(
+        tokens: GoogleTokens
+    ): Promise<boolean> {
+        const storage = (
+            this.app as {
+                secretStorage?: { setSecret?: (k: string, v: string) => void };
+            }
+        ).secretStorage;
+        if (!storage?.setSecret) return false;
+        try {
+            storage.setSecret(GOOGLE_TOKENS_SECRET_KEY, JSON.stringify(tokens));
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private deleteGoogleTokensFromStorage(): void {
+        const storage = (
+            this.app as {
+                secretStorage?: { setSecret?: (k: string, v: string) => void };
+            }
+        ).secretStorage;
+        if (!storage?.setSecret) return;
+        try {
+            storage.setSecret(GOOGLE_TOKENS_SECRET_KEY, "");
+        } catch {
+            /* ignore */
+        }
+    }
+
+    private getSettingsForSave(): FullCalendarSettings {
+        return {
+            ...this.settings,
+            googleRefreshToken: "",
+            googleAccessToken: "",
+            googleTokenExpiry: 0,
+        };
+    }
+
+    async initGoogleAuth() {
+        let tokens: GoogleTokens | null = null;
+
+        const storage = (this.app as { secretStorage?: unknown }).secretStorage;
+        if (storage) {
+            tokens = await this.loadGoogleTokensFromStorage();
+        }
+        if (!tokens && this.settings.googleRefreshToken) {
+            tokens = {
+                accessToken: this.settings.googleAccessToken || "",
+                refreshToken: this.settings.googleRefreshToken,
+                expiresAt: this.settings.googleTokenExpiry || 0,
+            };
+            if (storage) {
+                await this.saveGoogleTokensToStorage(tokens);
+                this.settings.googleRefreshToken = "";
+                this.settings.googleAccessToken = "";
+                this.settings.googleTokenExpiry = 0;
+                await this.saveData(this.getSettingsForSave());
+            }
+        }
 
         this.googleAuth = new GoogleAuthService(
             {
@@ -105,17 +177,31 @@ export default class FullCalendarPlugin extends Plugin {
             },
             tokens,
             async (newTokens) => {
-                this.settings.googleAccessToken = newTokens.accessToken;
-                this.settings.googleRefreshToken = newTokens.refreshToken;
-                this.settings.googleTokenExpiry = newTokens.expiresAt;
-                await this.saveData(this.settings);
+                if (newTokens.refreshToken || newTokens.accessToken) {
+                    const ok = await this.saveGoogleTokensToStorage(newTokens);
+                    if (ok) {
+                        await this.saveData(this.getSettingsForSave());
+                    } else {
+                        this.settings.googleAccessToken = newTokens.accessToken;
+                        this.settings.googleRefreshToken =
+                            newTokens.refreshToken;
+                        this.settings.googleTokenExpiry = newTokens.expiresAt;
+                        await Plugin.prototype.saveData.call(
+                            this,
+                            this.settings
+                        );
+                    }
+                } else {
+                    this.deleteGoogleTokensFromStorage();
+                    await this.saveData(this.getSettingsForSave());
+                }
             }
         );
     }
 
     async onload() {
         await this.loadSettings();
-        this.initGoogleAuth();
+        await this.initGoogleAuth();
 
         this.cache.reset(this.settings.calendarSources);
 
@@ -237,6 +323,14 @@ export default class FullCalendarPlugin extends Plugin {
             DEFAULT_SETTINGS,
             await this.loadData()
         );
+    }
+
+    async saveData(data?: unknown): Promise<void> {
+        const toSave =
+            data && typeof data === "object" && "calendarSources" in data
+                ? this.getSettingsForSave()
+                : data ?? this.getSettingsForSave();
+        return super.saveData(toSave);
     }
 
     async saveSettings() {

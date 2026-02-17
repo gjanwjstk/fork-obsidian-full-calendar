@@ -1,4 +1,5 @@
 import { ZodError, z } from "zod";
+import { getAccentColorHex } from "../colorUtils";
 import { OFCEvent } from "./schema";
 
 const calendarOptionsSchema = z.discriminatedUnion("type", [
@@ -64,17 +65,13 @@ export function makeDefaultPartialCalendarSource(
     if (type === "icloud") {
         return {
             type: "caldav",
-            color: getComputedStyle(document.body)
-                .getPropertyValue("--interactive-accent")
-                .trim(),
+            color: getAccentColorHex(),
             url: "https://caldav.icloud.com",
         };
     }
 
     return {
         type: type as CalendarInfo["type"],
-        color: getComputedStyle(document.body)
-            .getPropertyValue("--interactive-accent")
-            .trim(),
+        color: getAccentColorHex(),
     };
 }

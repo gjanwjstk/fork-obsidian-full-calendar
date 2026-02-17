@@ -37,13 +37,13 @@ export function launchCreateModal(
                 try {
                     await plugin.cache.addEvent(calendarId, data);
                     options?.markCreated?.();
+                    closeModal();
                 } catch (e) {
                     if (e instanceof Error) {
                         new Notice("Error when creating event: " + e.message);
                         console.error(e);
                     }
                 }
-                closeModal();
             },
         })
     ).open();
@@ -89,7 +89,15 @@ export function launchEditModal(plugin: FullCalendarPlugin, eventId: string) {
                             calendars[calendarIndex].id
                         );
                     }
-                    await plugin.cache.updateEventWithId(eventId, data);
+                    const ok = await plugin.cache.updateEventWithId(
+                        eventId,
+                        data
+                    );
+                    if (!ok) {
+                        new Notice(
+                            "이벤트가 캐시에서 제거되었습니다. 캘린더를 새로고침해주세요."
+                        );
+                    }
                 } catch (e) {
                     if (e instanceof Error) {
                         const msg = e.message;

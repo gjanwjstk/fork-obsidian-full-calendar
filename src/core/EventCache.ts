@@ -32,6 +32,21 @@ const MINUTE = 60 * SECOND;
 
 const MILLICONDS_BETWEEN_REVALIDATIONS = 5 * MINUTE;
 
+/**
+ * Normalize event for comparison. Hex color is lowercased so "#1F3A8A" and "#1f3a8a" are equal.
+ */
+function normalizeEventForCompare(e: OFCEvent): OFCEvent {
+    const copy = { ...e };
+    if (
+        copy.color &&
+        typeof copy.color === "string" &&
+        /^#[0-9A-Fa-f]{3,8}$/.test(copy.color)
+    ) {
+        copy.color = copy.color.toLowerCase();
+    }
+    return copy;
+}
+
 // TODO: Write tests for this function.
 export const eventsAreDifferent = (
     oldEvents: OFCEvent[],
@@ -51,7 +66,10 @@ export const eventsAreDifferent = (
     }
 
     const unmatchedEvents = oldEvents
-        .map((e, i) => ({ oldEvent: e, newEvent: newEvents[i] }))
+        .map((e, i) => ({
+            oldEvent: normalizeEventForCompare(e),
+            newEvent: normalizeEventForCompare(newEvents[i]),
+        }))
         .filter(({ oldEvent, newEvent }) => !equal(oldEvent, newEvent));
 
     if (unmatchedEvents.length > 0) {
@@ -60,6 +78,22 @@ export const eventsAreDifferent = (
 
     return unmatchedEvents.length > 0;
 };
+
+/**
+ * Create a stable key for matching events (same file, same semantic identity).
+ * Used to preserve cache IDs when refreshing from disk.
+ */
+function eventMatchKey(e: OFCEvent): string {
+    const date =
+        e.type === "single"
+            ? e.date
+            : e.type === "recurring"
+            ? e.startRecur
+            : e.type === "rrule"
+            ? e.startDate
+            : "";
+    return `${e.title}|${e.type || "single"}|${date || ""}`;
+}
 
 export type CachedEvent = Pick<StoredEvent, "event" | "id">;
 
@@ -85,8 +119,13 @@ export type OFCEventSource = {
  * Subscribers can register callbacks on the EventCache to be updated when events
  * change on disk.
  */
+const FILE_MODIFY_GRACE_MS = 500;
+
 export default class EventCache {
     private calendarInfos: CalendarInfo[] = [];
+
+    /** 파일 수정 직후 fileUpdated로 덮어쓰는 것을 방지 (stale metadata 대응) */
+    private recentlyModifiedFiles: Map<string, number> = new Map();
 
     private calendarInitializers: CalendarInitializerMap;
 
@@ -368,23 +407,24 @@ export default class EventCache {
      * @param eventId ID of event to be deleted.
      */
     async deleteEvent(eventId: string): Promise<void> {
-        // Check if this is a Google Calendar event
         const details = this.store.getEventDetails(eventId);
-        if (details) {
-            const calendar = this.calendars.get(details.calendarId);
-            if (calendar instanceof GoogleCalendar) {
-                const event = this.store.getEventById(eventId);
-                const googleEventId = event?.id || eventId;
-                this.store.delete(eventId);
-                await calendar.deleteGoogleEvent(googleEventId);
-                this.updateViews([eventId], []);
-                return;
-            }
+        if (!details) {
+            // 이벤트가 이미 캐시에 없음 (파일 동기화, revalidation 등으로 제거됨). no-op.
+            return;
+        }
+        const cal = this.calendars.get(details.calendarId);
+        if (cal instanceof GoogleCalendar) {
+            const event = this.store.getEventById(eventId);
+            const googleEventId = event?.id || eventId;
+            this.store.delete(eventId);
+            await cal.deleteGoogleEvent(googleEventId);
+            this.updateViews([eventId], []);
+            return;
         }
 
         const { calendar, location } = this.getInfoForEditableEvent(eventId);
         this.store.delete(eventId);
-        await calendar.deleteEvent(location);
+        await (calendar as EditableCalendar).deleteEvent(location);
         this.updateViews([eventId], []);
     }
 
@@ -435,10 +475,29 @@ export default class EventCache {
             }
         }
 
-        const { calendar, location: oldLocation } =
-            this.getInfoForEditableEvent(eventId);
+        if (!details) {
+            // 이벤트가 이미 캐시에 없음. 업데이트 불가.
+            return false;
+        }
+
+        try {
+            var { calendar, location: oldLocation } =
+                this.getInfoForEditableEvent(eventId);
+        } catch (e) {
+            if (
+                e instanceof Error &&
+                e.message.includes("not present in event store")
+            ) {
+                // 레이스: 체크 후에 file sync 등으로 이벤트 제거됨
+                return false;
+            }
+            throw e;
+        }
         const { path, lineNumber } = oldLocation;
         console.debug("updating event with ID", eventId);
+
+        // fileUpdated가 stale metadata로 즉시 덮어쓰는 것을 방지
+        this.recentlyModifiedFiles.set(path, Date.now());
 
         await calendar.modifyEvent(
             { path, lineNumber },
@@ -551,6 +610,19 @@ export default class EventCache {
     async fileUpdated(file: TFile): Promise<void> {
         console.debug("fileUpdated() called for file", file.path);
 
+        // 우리가 방금 수정한 파일: stale metadata로 덮어쓰지 않음 (색상 즉시 되돌아가는 버그 방지)
+        const modifiedAt = this.recentlyModifiedFiles.get(file.path);
+        if (modifiedAt !== undefined) {
+            this.recentlyModifiedFiles.delete(file.path);
+            if (Date.now() - modifiedAt < FILE_MODIFY_GRACE_MS) {
+                console.debug(
+                    "skip fileUpdated: recently modified by us",
+                    file.path
+                );
+                return;
+            }
+        }
+
         // Get all calendars that contain events stored in this file.
         const calendars = [...this.calendars.values()].flatMap((c) =>
             c instanceof EditableCalendar && c.containsPath(file.path) ? c : []
@@ -597,12 +669,27 @@ export default class EventCache {
                 newEvents
             );
 
-            const newEventsWithIds = newEvents.map(([event, location]) => ({
-                event,
-                id: event.id || this.generateId(),
-                location,
-                calendarId: calendar.id,
-            }));
+            // Preserve existing IDs when events match by semantic identity (title, type, date).
+            // This prevents "캐시에서 제거되었습니다" when editing (e.g. color change) triggers
+            // metadataCache "changed" and fileUpdated replaces events with new IDs.
+            const oldByKey = new Map(
+                oldEvents.map((r: StoredEvent) => [eventMatchKey(r.event), r])
+            );
+            const newEventsWithIds = newEvents.map(([event, location]) => {
+                const key = eventMatchKey(event);
+                const existing = oldByKey.get(key);
+                const id =
+                    event.id ||
+                    (existing ? existing.id : null) ||
+                    this.generateId();
+                if (existing) oldByKey.delete(key); // avoid reusing same id
+                return {
+                    event,
+                    id,
+                    location,
+                    calendarId: calendar.id,
+                };
+            });
 
             // If events have changed in the calendar, then remove all the old events from the store and add in new ones.
             const oldIds = oldEvents.map((r: StoredEvent) => r.id);

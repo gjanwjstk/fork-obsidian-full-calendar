@@ -23,6 +23,9 @@ interface GoogleEvent {
     };
     recurrence?: string[];
     status?: string;
+    extendedProperties?: {
+        private?: Record<string, string>;
+    };
 }
 
 interface GoogleEventsListResponse {
@@ -149,6 +152,8 @@ export default class GoogleCalendar extends RemoteCalendar {
 
         const title = gEvent.summary || "(No title)";
         const id = gEvent.id;
+        const ofcColor =
+            gEvent.extendedProperties?.private?.ofcColor ?? undefined;
 
         // All-day event
         if (gEvent.start?.date) {
@@ -160,6 +165,7 @@ export default class GoogleCalendar extends RemoteCalendar {
                 date: gEvent.start.date,
                 endDate: gEvent.end?.date || null,
                 completed: null,
+                ...(ofcColor ? { color: ofcColor } : {}),
             };
         }
 
@@ -190,6 +196,7 @@ export default class GoogleCalendar extends RemoteCalendar {
                 startTime,
                 endTime,
                 completed: null,
+                ...(ofcColor ? { color: ofcColor } : {}),
             };
         }
 
@@ -231,6 +238,13 @@ export default class GoogleCalendar extends RemoteCalendar {
             const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
             gEvent.start = { dateTime: startDateTime, timeZone: tz };
             gEvent.end = { dateTime: endDateTime, timeZone: tz };
+        }
+
+        // 일정별 색상을 Google extendedProperties.private에 저장 (재시작/재동기화 후에도 유지)
+        if (event.color) {
+            gEvent.extendedProperties = {
+                private: { ofcColor: event.color },
+            };
         }
 
         return gEvent;

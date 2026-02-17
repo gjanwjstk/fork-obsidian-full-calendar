@@ -197,7 +197,7 @@ describe("Note Calendar Tests", () => {
         `);
     });
 
-    it("cannot overwrite event", async () => {
+    it("creates event with numeric suffix when file already exists", async () => {
         const event = {
             title: "Test Event",
             allDay: true,
@@ -214,10 +214,15 @@ describe("Note Calendar Tests", () => {
                 )
                 .done()
         );
+        (obsidian.create as jest.Mock).mockReturnValue({
+            path: join(dirName, "2022-01-01 Test Event 2.md"),
+        });
         const calendar = new FullNoteCalendar(obsidian, color, dirName);
-        await assertFailed(
-            () => calendar.createEvent(parseEvent(event)),
-            /already exists/
+        const { lineNumber } = await calendar.createEvent(parseEvent(event));
+        expect(lineNumber).toBeUndefined();
+        expect(obsidian.create).toHaveBeenCalledTimes(1);
+        expect((obsidian.create as jest.Mock).mock.calls[0][0]).toBe(
+            "events/2022-01-01 Test Event 2.md"
         );
     });
 

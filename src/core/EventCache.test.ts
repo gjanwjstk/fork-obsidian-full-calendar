@@ -465,10 +465,8 @@ describe("editable calendars", () => {
             expect(cache._storeForTest.fileCount).toBe(1);
             expect(cache._storeForTest.eventCount).toBe(1);
 
-            assertFailed(
-                () => cache.deleteEvent("unknown ID"),
-                /not present in event store/
-            );
+            await cache.deleteEvent("unknown ID");
+            // 알 수 없는 ID는 no-op(에러 없이 완료)
 
             const calendar = getCalendar(cache, "test");
             expect(calendar.deleteEvent.mock.calls.length).toBe(0);
@@ -564,10 +562,9 @@ describe("editable calendars", () => {
                 events: 1,
             });
 
-            assertFailed(
-                () => cache.updateEventWithId("unknown ID", mockEvent()),
-                /not present in event store/
-            );
+            const ok = await cache.updateEventWithId("unknown ID", mockEvent());
+            expect(ok).toBe(false);
+            // 알 수 없는 ID는 false 반환(에러 없이)
 
             const sources = cache.getAllEvents();
             expect(sources.length).toBe(1);

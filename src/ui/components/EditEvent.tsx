@@ -2,6 +2,7 @@ import { DateTime } from "luxon";
 import * as React from "react";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { CalendarInfo, OFCEvent } from "../../types";
+import { getAccentColorHex, toHexForColorInput } from "../../colorUtils";
 
 const AUTO_SAVE_DEBOUNCE_MS = 400;
 
@@ -161,13 +162,11 @@ export const EditEvent = ({
     const [calendarIndex, setCalendarIndex] = useState(defaultCalendarIndex);
 
     const defaultEventColor =
-        typeof document !== "undefined"
-            ? getComputedStyle(document.body)
-                  .getPropertyValue("--interactive-accent")
-                  .trim() || "#808080"
-            : "#808080";
+        typeof document !== "undefined" ? getAccentColorHex() : "#808080";
     const [eventColor, setEventColor] = useState(
-        initialEvent?.color || defaultEventColor
+        initialEvent?.color
+            ? toHexForColorInput(initialEvent.color)
+            : defaultEventColor
     );
 
     const [complete, setComplete] = useState(
@@ -356,7 +355,7 @@ export const EditEvent = ({
                 >
                     <input
                         type="color"
-                        value={eventColor}
+                        value={toHexForColorInput(eventColor)}
                         onChange={(e) => {
                             const c = e.target.value;
                             setEventColor(c);

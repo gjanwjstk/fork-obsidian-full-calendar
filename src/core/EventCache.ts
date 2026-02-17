@@ -52,23 +52,23 @@ export const eventsAreDifferent = (
     oldEvents: OFCEvent[],
     newEvents: OFCEvent[]
 ): boolean => {
-    oldEvents.sort((a, b) => a.title.localeCompare(b.title));
-    newEvents.sort((a, b) => a.title.localeCompare(b.title));
+    let oldList = [...oldEvents].sort((a, b) => a.title.localeCompare(b.title));
+    let newList = [...newEvents].sort((a, b) => a.title.localeCompare(b.title));
 
     // validateEvent() will normalize the representation of default fields in events.
-    oldEvents = oldEvents.flatMap((e) => validateEvent(e) || []);
-    newEvents = newEvents.flatMap((e) => validateEvent(e) || []);
+    oldList = oldList.flatMap((e) => validateEvent(e) || []);
+    newList = newList.flatMap((e) => validateEvent(e) || []);
 
     console.debug("comparing events", oldEvents, newEvents);
 
-    if (oldEvents.length !== newEvents.length) {
+    if (oldList.length !== newList.length) {
         return true;
     }
 
-    const unmatchedEvents = oldEvents
+    const unmatchedEvents = oldList
         .map((e, i) => ({
             oldEvent: normalizeEventForCompare(e),
-            newEvent: normalizeEventForCompare(newEvents[i]),
+            newEvent: normalizeEventForCompare(newList[i]),
         }))
         .filter(({ oldEvent, newEvent }) => !equal(oldEvent, newEvent));
 
@@ -417,8 +417,16 @@ export default class EventCache {
             const event = this.store.getEventById(eventId);
             const googleEventId = event?.id || eventId;
             this.store.delete(eventId);
-            await cal.deleteGoogleEvent(googleEventId);
-            this.updateViews([eventId], []);
+            this.updateViews([eventId], []); // 화면에서 제거 (API 실패 여부와 무관)
+            try {
+                await cal.deleteGoogleEvent(googleEventId);
+            } catch (apiErr: unknown) {
+                // HTTP 410 = 이미 삭제됨. 성공으로 간주.
+                const msg =
+                    apiErr instanceof Error ? apiErr.message : String(apiErr);
+                if (msg.includes("410")) return;
+                throw apiErr;
+            }
             return;
         }
 
@@ -545,11 +553,23 @@ export default class EventCache {
 
     async moveEventToCalendar(
         eventId: string,
-        newCalendarId: string
+        newCalendarId: string,
+        eventData?: OFCEvent
     ): Promise<void> {
         const event = this.store.getEventById(eventId);
         const details = this.store.getEventDetails(eventId);
+
+        // Event may have been removed by revalidation (e.g. Google Calendar refresh) while
+        // the edit modal was open. If we have eventData from the modal, add to target and skip delete.
         if (!details || !event) {
+            if (eventData) {
+                console.debug(
+                    `Event ${eventId} not in store (likely removed by revalidation); adding form data to ${newCalendarId}`
+                );
+                const { id: _discardId, ...dataWithoutId } = eventData;
+                await this.addEvent(newCalendarId, dataWithoutId as OFCEvent);
+                return;
+            }
             throw new Error(
                 `Tried moving unknown event ID ${eventId} to calendar ${newCalendarId}`
             );
@@ -565,28 +585,48 @@ export default class EventCache {
             throw new Error(`Source calendar ${newCalendarId} does not exist.`);
         }
 
-        // TODO: Support moving around events between all sorts of editable calendars.
+        // FullNote→FullNote with location: use existing move logic (file rename)
         if (
-            !(
-                oldCalendar instanceof FullNoteCalendar &&
-                newCalendar instanceof FullNoteCalendar &&
-                location
-            )
+            oldCalendar instanceof FullNoteCalendar &&
+            newCalendar instanceof FullNoteCalendar &&
+            location
         ) {
-            throw new Error(
-                `Both calendars must be Full Note Calendars to move events between them.`
-            );
+            await oldCalendar.move(location, newCalendar, (newLocation) => {
+                this.store.delete(eventId);
+                this.store.add({
+                    calendar: newCalendar,
+                    location: newLocation,
+                    id: eventId,
+                    event,
+                });
+            });
+            return;
         }
 
-        await oldCalendar.move(location, newCalendar, (newLocation) => {
-            this.store.delete(eventId);
-            this.store.add({
-                calendar: newCalendar,
-                location: newLocation,
-                id: eventId,
-                event,
-            });
-        });
+        // Cross-type move: add first (to avoid data loss), then delete
+        const eventToAdd = eventData ?? event;
+        const { id: _discardId, ...dataWithoutId } = eventToAdd;
+        try {
+            await this.addEvent(newCalendarId, dataWithoutId as OFCEvent);
+        } catch (addErr) {
+            throw addErr;
+        }
+        try {
+            await this.deleteEvent(eventId);
+        } catch (deleteErr: unknown) {
+            const msg =
+                deleteErr instanceof Error
+                    ? deleteErr.message
+                    : String(deleteErr);
+            if (msg.includes("410")) {
+                // HTTP 410 = 구글에서 이미 삭제됨. 정상 처리.
+                return;
+            }
+            new Notice(
+                "이벤트가 새 캘린더에 추가되었으나, 기존 캘린더에서 삭제에 실패했습니다. 중복된 이벤트가 있을 수 있으니 확인해 주세요."
+            );
+            throw deleteErr;
+        }
     }
 
     ///

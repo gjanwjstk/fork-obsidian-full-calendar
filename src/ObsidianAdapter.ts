@@ -189,6 +189,11 @@ export class ObsidianIO implements ObsidianInterface {
                 resolve(cache);
                 return;
             }
+            const timeoutMs = 10000;
+            const timeoutId = setTimeout(() => {
+                if (ref) this.metadataCache.offref(ref);
+                reject(new Error("waitForMetadata timeout"));
+            }, timeoutMs);
             ref = this.metadataCache.on(
                 "changed",
                 (changedFile, data, cache) => {
@@ -198,6 +203,7 @@ export class ObsidianIO implements ObsidianInterface {
                         );
                         return;
                     }
+                    clearTimeout(timeoutId);
                     resolve(cache);
                     if (ref) {
                         this.metadataCache.offref(ref);

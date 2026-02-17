@@ -75,6 +75,29 @@ function UrlSetting<T extends Partial<CalendarInfo>>({
     );
 }
 
+function GcalSetting<T extends Partial<CalendarInfo>>({
+    source,
+}: BasicProps<T>) {
+    let sourceWithGcal = source as SourceWith<
+        T,
+        { calendarId: string; name: string }
+    >;
+    return (
+        <div className="setting-item-control">
+            <input
+                disabled
+                type="text"
+                value={sourceWithGcal.calendarId || ""}
+                style={{
+                    width: "100%",
+                    marginLeft: 4,
+                    marginRight: 4,
+                }}
+            />
+        </div>
+    );
+}
+
 function NameSetting<T extends Partial<CalendarInfo>>({
     source,
 }: BasicProps<T>) {
@@ -125,6 +148,7 @@ export const CalendarSettingRow = ({
     deleteCalendar,
 }: CalendarSettingsProps) => {
     const isCalDAV = setting.type === "caldav";
+    const isGcal = setting.type === "gcal";
     return (
         <div className="setting-item">
             <button
@@ -138,10 +162,12 @@ export const CalendarSettingRow = ({
                 <DirectorySetting source={setting} />
             ) : setting.type === "dailynote" ? (
                 <HeadingSetting source={setting} />
+            ) : setting.type === "gcal" ? (
+                <GcalSetting source={setting} />
             ) : (
                 <UrlSetting source={setting} />
             )}
-            {isCalDAV && <NameSetting source={setting} />}
+            {(isCalDAV || isGcal) && <NameSetting source={setting} />}
             {isCalDAV && <Username source={setting} />}
             <input
                 style={{ maxWidth: "25%", minWidth: "3rem" }}

@@ -21,6 +21,7 @@ import ICSCalendar from "./calendars/ICSCalendar";
 import CalDAVCalendar from "./calendars/CalDAVCalendar";
 import { GoogleAuthService, GoogleTokens } from "./auth/GoogleAuth";
 import GoogleCalendar from "./calendars/GoogleCalendar";
+import { cleanupDuplicateDailyNoteEvents } from "./cleanupDuplicateDailyEvents";
 
 const GOOGLE_TOKENS_SECRET_KEY = "full-calendar-google-oauth-tokens";
 
@@ -270,6 +271,33 @@ export default class FullCalendarPlugin extends Plugin {
                     FULL_CALENDAR_SIDEBAR_VIEW_TYPE
                 );
                 new Notice("Full Calendar has been reset.");
+            },
+        });
+
+        this.addCommand({
+            id: "full-calendar-cleanup-duplicates",
+            name: "Clean duplicate daily note events",
+            callback: async () => {
+                try {
+                    const { filesCleaned, duplicatesRemoved } =
+                        await cleanupDuplicateDailyNoteEvents(
+                            this.app,
+                            this.settings
+                        );
+                    this.cache.reset(this.settings.calendarSources);
+                    await this.cache.populate();
+                    this.cache.resync();
+                    new Notice(
+                        `중복 일정 정리 완료: ${filesCleaned}개 파일에서 ${duplicatesRemoved}개 제거됨.`
+                    );
+                } catch (e) {
+                    console.error(e);
+                    new Notice(
+                        e instanceof Error
+                            ? e.message
+                            : "중복 정리 중 오류 발생"
+                    );
+                }
             },
         });
 

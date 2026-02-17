@@ -414,17 +414,7 @@ export const EditEvent = ({
                         }}
                     >
                         {calendars.map((cal, idx) => (
-                            <option
-                                key={idx}
-                                value={idx}
-                                disabled={
-                                    !(
-                                        initialEvent?.title === undefined ||
-                                        calendars[calendarIndex].type ===
-                                            cal.type
-                                    )
-                                }
-                            >
+                            <option key={idx} value={idx}>
                                 {cal.type === "gcal"
                                     ? `[Google] ${cal.name}`
                                     : cal.type === "dailynote"
@@ -468,21 +458,33 @@ export const EditEvent = ({
                         </>
                     )}
                 </p>
-                <p>
-                    <label htmlFor="allDay">All day event </label>
+                <p
+                    style={{
+                        display: "flex",
+                        flexWrap: "nowrap",
+                        gap: "1rem",
+                        alignItems: "center",
+                    }}
+                >
+                    <label htmlFor="allDay">종일 이벤트</label>
                     <input
                         id="allDay"
                         checked={allDay}
                         onChange={wrapCheck(setAllDay)}
                         type="checkbox"
                     />
-                </p>
-                <p>
-                    <label htmlFor="recurring">Recurring Event </label>
+                    <label htmlFor="recurring">반복 이벤트</label>
                     <input
                         id="recurring"
                         checked={isRecurring}
                         onChange={wrapCheck(setIsRecurring)}
+                        type="checkbox"
+                    />
+                    <label htmlFor="task">작업 이벤트</label>
+                    <input
+                        id="task"
+                        checked={isTask}
+                        onChange={wrapCheck(setIsTask)}
                         type="checkbox"
                     />
                 </p>
@@ -512,15 +514,6 @@ export const EditEvent = ({
                         </p>
                     </>
                 )}
-                <p>
-                    <label htmlFor="task">Task Event </label>
-                    <input
-                        id="task"
-                        checked={isTask}
-                        onChange={wrapCheck(setIsTask)}
-                        type="checkbox"
-                    />
-                </p>
 
                 {isTask && (
                     <>

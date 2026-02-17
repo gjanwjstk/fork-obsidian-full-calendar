@@ -5,7 +5,8 @@ import { App, Modal } from "obsidian";
 type BeforeCloseFn = () => Promise<void>;
 type RenderCallback = (
     close: () => void,
-    registerBeforeClose: (fn: BeforeCloseFn) => void
+    registerBeforeClose: (fn: BeforeCloseFn) => void,
+    forceClose: () => void
 ) => Promise<ReturnType<typeof React.createElement>>;
 
 export default class ReactModal<Props, Component> extends Modal {
@@ -32,13 +33,23 @@ export default class ReactModal<Props, Component> extends Modal {
         }
     }
 
+    /** Close immediately without running beforeClose. Use when already saved (e.g. after move). */
+    forceClose(): void {
+        (Modal.prototype as { close: () => void }).close.call(this);
+    }
+
     async onOpen() {
         const { contentEl } = this;
         const registerBeforeClose = (fn: BeforeCloseFn) => {
             this.beforeCloseRef.current = fn;
         };
+        const forceClose = () => this.forceClose();
         ReactDOM.render(
-            await this.onOpenCallback(() => this.close(), registerBeforeClose),
+            await this.onOpenCallback(
+                () => this.close(),
+                registerBeforeClose,
+                forceClose
+            ),
             contentEl
         );
     }

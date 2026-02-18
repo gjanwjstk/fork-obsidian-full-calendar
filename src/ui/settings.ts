@@ -426,6 +426,11 @@ export class FullCalendarSettingTab extends PluginSettingTab {
                 submit: async (settings: CalendarInfo[]) => {
                     this.plugin.settings.calendarSources = settings;
                     await this.plugin.saveSettings();
+                    this.plugin.cache.reset(
+                        this.plugin.settings.calendarSources
+                    );
+                    await this.plugin.cache.populate();
+                    this.plugin.cache.resync();
                 },
             }),
             sourcesDiv

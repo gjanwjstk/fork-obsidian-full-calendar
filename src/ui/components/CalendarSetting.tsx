@@ -1,6 +1,5 @@
 import { Notice } from "obsidian";
 import * as React from "react";
-import { SetStateAction, useState } from "react";
 
 import { CalendarInfo } from "../../types";
 import { toHexForColorInput } from "../../colorUtils";
@@ -140,17 +139,45 @@ interface CalendarSettingsProps {
     setting: Partial<CalendarInfo>;
     onColorChange: (s: string) => void;
     deleteCalendar: () => void;
+    index: number;
+    totalCount: number;
+    onMoveUp: () => void;
+    onMoveDown: () => void;
 }
 
 export const CalendarSettingRow = ({
     setting,
     onColorChange,
     deleteCalendar,
+    index,
+    totalCount,
+    onMoveUp,
+    onMoveDown,
 }: CalendarSettingsProps) => {
     const isCalDAV = setting.type === "caldav";
     const isGcal = setting.type === "gcal";
+    const canMoveUp = index > 0;
+    const canMoveDown = index < totalCount - 1;
     return (
         <div className="setting-item">
+            <button
+                type="button"
+                onClick={onMoveUp}
+                disabled={!canMoveUp}
+                style={{ maxWidth: "8%" }}
+                title="위로 이동"
+            >
+                ▲
+            </button>
+            <button
+                type="button"
+                onClick={onMoveDown}
+                disabled={!canMoveDown}
+                style={{ maxWidth: "8%" }}
+                title="아래로 이동"
+            >
+                ▼
+            </button>
             <button
                 type="button"
                 onClick={deleteCalendar}
@@ -203,6 +230,24 @@ export class CalendarSettings extends React.Component<
         }));
     }
 
+    moveUp(idx: number) {
+        if (idx <= 0) return;
+        this.setState((state) => {
+            const sources = [...state.sources];
+            [sources[idx - 1], sources[idx]] = [sources[idx], sources[idx - 1]];
+            return { sources, dirty: true };
+        });
+    }
+
+    moveDown(idx: number) {
+        if (idx >= this.state.sources.length - 1) return;
+        this.setState((state) => {
+            const sources = [...state.sources];
+            [sources[idx], sources[idx + 1]] = [sources[idx + 1], sources[idx]];
+            return { sources, dirty: true };
+        });
+    }
+
     render() {
         return (
             <div style={{ width: "100%" }}>
@@ -210,6 +255,10 @@ export class CalendarSettings extends React.Component<
                     <CalendarSettingRow
                         key={idx}
                         setting={s}
+                        index={idx}
+                        totalCount={this.state.sources.length}
+                        onMoveUp={() => this.moveUp(idx)}
+                        onMoveDown={() => this.moveDown(idx)}
                         onColorChange={(color) =>
                             this.setState((state, props) => ({
                                 sources: [

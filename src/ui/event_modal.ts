@@ -33,6 +33,7 @@ export function launchCreateModal(
                 defaultCalendarIndex: 0,
                 closeModal,
                 registerBeforeClose,
+                forceClose,
                 isCreate: true,
                 submit: async (data, calendarIndex, options) => {
                     const calendarId = calendars[calendarIndex].id;

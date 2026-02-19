@@ -104,6 +104,8 @@ interface EditEventProps {
     deleteEvent?: () => Promise<void>;
     closeModal?: () => void;
     registerBeforeClose?: (fn: () => Promise<void>) => void;
+    /** 생성 모드에서 저장 없이 닫을 때 사용 (beforeClose 스킵) */
+    forceClose?: () => void;
     isCreate?: boolean;
 }
 
@@ -116,6 +118,7 @@ export const EditEvent = ({
     defaultCalendarIndex,
     closeModal,
     registerBeforeClose,
+    forceClose,
     isCreate = false,
 }: EditEventProps) => {
     const [date, setDate] = useState(
@@ -257,6 +260,9 @@ export const EditEvent = ({
     );
 
     const autoSave = useCallback(() => {
+        // 새 이벤트 생성 시 autoSave 비활성화: 제목 입력 중 400ms 멈추면
+        // submit→forceClose로 모달이 닫히는 버그 방지
+        if (isCreate) return;
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
         }
@@ -264,7 +270,7 @@ export const EditEvent = ({
             () => performSave(undefined),
             AUTO_SAVE_DEBOUNCE_MS
         );
-    }, [performSave]);
+    }, [performSave, isCreate]);
 
     const saveImmediately = useCallback(
         (overrides?: Partial<OFCEvent>) => {
@@ -294,9 +300,12 @@ export const EditEvent = ({
 
     useEffect(() => {
         if (registerBeforeClose) {
-            registerBeforeClose(async () => saveImmediately());
+            // 생성 모드: Esc/닫기 시 저장하지 않음 (저장은 '저장' 버튼으로만)
+            registerBeforeClose(
+                isCreate ? async () => {} : async () => saveImmediately()
+            );
         }
-    }, [registerBeforeClose, saveImmediately]);
+    }, [registerBeforeClose, saveImmediately, isCreate]);
 
     const wrapChange =
         <T,>(
@@ -543,11 +552,20 @@ export const EditEvent = ({
                         width: "100%",
                     }}
                 >
-                    {closeModal && (
+                    {isCreate ? (
+                        <>
+                            <button type="submit">저장</button>
+                            {forceClose && (
+                                <button type="button" onClick={forceClose}>
+                                    취소
+                                </button>
+                            )}
+                        </>
+                    ) : closeModal ? (
                         <button type="button" onClick={closeModal}>
                             Close
                         </button>
-                    )}
+                    ) : null}
                     <span>
                         {deleteEvent && (
                             <button

@@ -47,13 +47,33 @@ function normalizeEventForCompare(e: OFCEvent): OFCEvent {
     return copy;
 }
 
+function eventSortKey(e: OFCEvent): string {
+    const date =
+        e.type === "single"
+            ? e.date ?? ""
+            : e.type === "recurring"
+            ? e.startRecur ?? ""
+            : e.type === "rrule"
+            ? e.startDate ?? ""
+            : "";
+    const time =
+        (e.type === "single" || !e.type) && "startTime" in e && e.startTime
+            ? e.startTime
+            : "";
+    return `${e.title}|${date}|${time}`;
+}
+
 // TODO: Write tests for this function.
 export const eventsAreDifferent = (
     oldEvents: OFCEvent[],
     newEvents: OFCEvent[]
 ): boolean => {
-    let oldList = [...oldEvents].sort((a, b) => a.title.localeCompare(b.title));
-    let newList = [...newEvents].sort((a, b) => a.title.localeCompare(b.title));
+    let oldList = [...oldEvents].sort((a, b) =>
+        eventSortKey(a).localeCompare(eventSortKey(b))
+    );
+    let newList = [...newEvents].sort((a, b) =>
+        eventSortKey(a).localeCompare(eventSortKey(b))
+    );
 
     // validateEvent() will normalize the representation of default fields in events.
     oldList = oldList.flatMap((e) => validateEvent(e) || []);
@@ -507,6 +527,7 @@ export default class EventCache {
         // fileUpdated가 stale metadata로 즉시 덮어쓰는 것을 방지
         this.recentlyModifiedFiles.set(path, Date.now());
 
+        const oldEvent = this.store.getEventById(eventId) ?? undefined;
         await calendar.modifyEvent(
             { path, lineNumber },
             newEvent,
@@ -518,7 +539,8 @@ export default class EventCache {
                     id: eventId,
                     event: newEvent,
                 });
-            }
+            },
+            oldEvent
         );
 
         this.updateViews(
@@ -709,20 +731,39 @@ export default class EventCache {
                 newEvents
             );
 
-            // Preserve existing IDs when events match by semantic identity (title, type, date).
-            // This prevents "캐시에서 제거되었습니다" when editing (e.g. color change) triggers
-            // metadataCache "changed" and fileUpdated replaces events with new IDs.
-            const oldByKey = new Map(
-                oldEvents.map((r: StoredEvent) => [eventMatchKey(r.event), r])
-            );
+            // 1순위: location(path + lineNumber)로 매칭 → 드래그로 시간 변경 시에도 ID 유지
+            // 2순위: eventMatchKey로 fallback (외부 편집 등으로 줄 번호 밀림 시)
+            const locationKey = (
+                path: string,
+                lineNumber: number | undefined
+            ) => `${path}|${lineNumber ?? ""}`;
+            const oldByLocation = new Map<string, StoredEvent>();
+            const oldByKey = new Map<string, StoredEvent>();
+            for (const r of oldEvents) {
+                if (r.location) {
+                    oldByLocation.set(
+                        locationKey(r.location.path, r.location.lineNumber),
+                        r
+                    );
+                }
+                const key = eventMatchKey(r.event);
+                if (!oldByKey.has(key)) oldByKey.set(key, r);
+            }
             const newEventsWithIds = newEvents.map(([event, location]) => {
-                const key = eventMatchKey(event);
-                const existing = oldByKey.get(key);
+                const path = location.file.path;
+                const locKey = locationKey(path, location.lineNumber);
+                let existing = oldByLocation.get(locKey);
+                if (existing) {
+                    oldByLocation.delete(locKey);
+                    oldByKey.delete(eventMatchKey(existing.event));
+                } else {
+                    existing = oldByKey.get(eventMatchKey(event));
+                    if (existing) oldByKey.delete(eventMatchKey(event));
+                }
                 const id =
                     event.id ||
                     (existing ? existing.id : null) ||
                     this.generateId();
-                if (existing) oldByKey.delete(key); // avoid reusing same id
                 return {
                     event,
                     id,

@@ -60,10 +60,12 @@ export abstract class EditableCalendar extends Calendar {
      * @param updateCacheWithLocation This callback updates the cache with the new location
      *        of the event. In order to avoid race conditions with file I/O, make sure this
      *        is called before any files are changed on disk.
+     * @param oldEvent Previous event (for fallback matching when multiple same-title lines exist)
      */
     abstract modifyEvent(
         location: EventPathLocation,
         newEvent: OFCEvent,
-        updateCacheWithLocation: (loc: EventLocation) => void
+        updateCacheWithLocation: (loc: EventLocation) => void,
+        oldEvent?: OFCEvent
     ): Promise<void>;
 }

@@ -421,7 +421,8 @@ export default class DailyNoteCalendar extends EditableCalendar {
     async modifyEvent(
         loc: EventPathLocation,
         newEvent: OFCEvent,
-        updateCacheWithLocation: (loc: EventLocation) => void
+        updateCacheWithLocation: (loc: EventLocation) => void,
+        oldEvent?: OFCEvent
     ): Promise<void> {
         console.debug("modified daily note event");
         if (newEvent.type !== "single" && newEvent.type !== undefined) {
@@ -482,14 +483,57 @@ export default class DailyNoteCalendar extends EditableCalendar {
             });
         } else {
             console.debug("daily note event staying in same file.");
-            updateCacheWithLocation({ file, lineNumber });
             await this.app.rewrite(file, (contents) => {
                 const lines = contents.split("\n");
-                const newLine = modifyListItem(lines[lineNumber], newEvent);
+                let targetLineIndex = lineNumber;
+                let newLine = modifyListItem(lines[lineNumber], newEvent);
+
+                if (!newLine) {
+                    // 캐시된 lineNumber가 잘못됐을 수 있음(파일 수정 등) → 제목+startTime으로 재탐색
+                    const fileGlobalAttrs = {
+                        type: "single" as const,
+                        date: oldDate,
+                    };
+                    const fallbackIndex = lines.findIndex((line) => {
+                        const parsed = getInlineEventFromLine(
+                            line,
+                            fileGlobalAttrs
+                        );
+                        if (!parsed || parsed.title !== newEvent.title)
+                            return false;
+                        const oldStartTime =
+                            oldEvent && "startTime" in oldEvent
+                                ? (oldEvent as { startTime?: string }).startTime
+                                : undefined;
+                        if (oldStartTime != null) {
+                            return (
+                                "startTime" in parsed &&
+                                parsed.startTime === oldStartTime
+                            );
+                        }
+                        return true;
+                    });
+                    if (fallbackIndex >= 0) {
+                        targetLineIndex = fallbackIndex;
+                        newLine = modifyListItem(
+                            lines[fallbackIndex],
+                            newEvent
+                        );
+                        updateCacheWithLocation({
+                            file,
+                            lineNumber: fallbackIndex,
+                        });
+                    } else {
+                        updateCacheWithLocation({ file, lineNumber });
+                    }
+                } else {
+                    updateCacheWithLocation({ file, lineNumber });
+                }
+
                 if (!newLine) {
                     throw new Error("Did not successfully update line.");
                 }
-                lines[lineNumber] = newLine;
+                lines[targetLineIndex] = newLine;
                 return lines.join("\n");
             });
         }

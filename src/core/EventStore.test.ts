@@ -79,7 +79,7 @@ describe.each([true, false])(
             expect(store.eventCount).toBe(1);
         });
 
-        it(`throws when trying to overwrite an ID entry`, () => {
+        it(`replaces when same calendar+id, throws when different calendar`, () => {
             const calendar = mockCalendar();
             const location = mockLocation(withLineNumbers);
             const id = mockId();
@@ -87,21 +87,24 @@ describe.each([true, false])(
 
             store.add({ calendar, location, id, event });
 
+            // 같은 캘린더: replace (경쟁 조건 대응)
             expect(() =>
                 store.add({ calendar, location, id, event })
-            ).toThrow();
+            ).not.toThrow();
             const calendar2 = mockCalendar();
             const event2 = mockEvent();
             const location2 = mockLocation(withLineNumbers);
+            // 다른 캘린더: throw
             expect(() =>
                 store.add({ calendar: calendar2, location, id, event })
             ).toThrow();
+            // 같은 캘린더 + 다른 location/event: replace
             expect(() =>
                 store.add({ calendar, location: location2, id, event })
-            ).toThrow();
+            ).not.toThrow();
             expect(() =>
                 store.add({ calendar, location, id, event: event2 })
-            ).toThrow();
+            ).not.toThrow();
         });
 
         it(`throws when trying to overwrite an ID entry`, () => {

@@ -199,13 +199,17 @@ export default class EventStore {
      */
     add({ calendar, location, id, event }: AddEventProps): string {
         if (this.store.has(id)) {
-            throw new Error(
-                `Event with given ID "${id}" that was supposed to be added to calendar "${
-                    calendar.id
-                }" already exists in the EventStore within calendar "${this.calendarIndex.getRelated(
-                    new EventID(id)
-                )}".`
+            const existingCalendarId = this.calendarIndex.getRelated(
+                new EventID(id)
             );
+            if (existingCalendarId === calendar.id) {
+                // 동일 캘린더 내 중복 ID: replace로 처리 (fileUpdated 경쟁 조건 대응)
+                this.delete(id);
+            } else {
+                throw new Error(
+                    `Event with given ID "${id}" that was supposed to be added to calendar "${calendar.id}" already exists in the EventStore within calendar "${existingCalendarId}".`
+                );
+            }
         }
 
         console.debug("adding event", { id, event, location });

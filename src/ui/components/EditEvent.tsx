@@ -7,7 +7,7 @@ import { getAccentColorHex, toHexForColorInput } from "../../colorUtils";
 const AUTO_SAVE_DEBOUNCE_MS = 400;
 
 const COLOR_PRESETS = [
-    { id: "deepWork", label: "작업", color: "##9873f7" },
+    { id: "deepWork", label: "작업", color: "#9873f7" },
     { id: "routine", label: "이동/준비", color: "#5aa9e6" },
     { id: "health", label: "건강", color: "#2fbf71" },
     { id: "relationship", label: "사람", color: "#ff7a45" },

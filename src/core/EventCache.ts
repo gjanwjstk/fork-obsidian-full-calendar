@@ -749,6 +749,7 @@ export default class EventCache {
                 const key = eventMatchKey(r.event);
                 if (!oldByKey.has(key)) oldByKey.set(key, r);
             }
+            const usedIds = new Set<string>();
             const newEventsWithIds = newEvents.map(([event, location]) => {
                 const path = location.file.path;
                 const locKey = locationKey(path, location.lineNumber);
@@ -760,10 +761,14 @@ export default class EventCache {
                     existing = oldByKey.get(eventMatchKey(event));
                     if (existing) oldByKey.delete(eventMatchKey(event));
                 }
-                const id =
+                let id =
                     event.id ||
                     (existing ? existing.id : null) ||
                     this.generateId();
+                if (usedIds.has(id)) {
+                    id = this.generateId();
+                }
+                usedIds.add(id);
                 return {
                     event,
                     id,

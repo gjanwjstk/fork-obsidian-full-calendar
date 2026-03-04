@@ -7,9 +7,11 @@ import { getAccentColorHex, toHexForColorInput } from "../../colorUtils";
 const AUTO_SAVE_DEBOUNCE_MS = 400;
 
 const COLOR_PRESETS = [
-    { id: "work", label: "업무", color: "#1F3A8A" },
-    { id: "exercise", label: "운동", color: "#059669" },
-    { id: "personal", label: "개인", color: "#EA580C" },
+    { id: "deepWork", label: "작업", color: "#9873f7" },
+    { id: "routine", label: "이동/준비", color: "#5aa9e6" },
+    { id: "health", label: "건강", color: "#2fbf71" },
+    { id: "relationship", label: "사람", color: "#ff7a45" },
+    { id: "recovery", label: "휴식/취미", color: "#ffd166" },
 ] as const;
 
 function makeChangeListener<T>(
@@ -362,23 +364,6 @@ export const EditEvent = ({
                         flexWrap: "wrap",
                     }}
                 >
-                    <input
-                        type="color"
-                        value={toHexForColorInput(eventColor)}
-                        onChange={(e) => {
-                            const c = e.target.value;
-                            setEventColor(c);
-                            saveImmediately({ color: c });
-                        }}
-                        style={{
-                            width: "2rem",
-                            height: "1.5rem",
-                            padding: 0,
-                            border: "none",
-                            cursor: "pointer",
-                        }}
-                        title="Event color"
-                    />
                     {COLOR_PRESETS.map((preset) => (
                         <label
                             key={preset.id}

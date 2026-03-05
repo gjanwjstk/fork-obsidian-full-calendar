@@ -55,6 +55,7 @@ export class CalendarView extends ItemView {
     inSidebar: boolean;
     fullCalendarView: Calendar | null = null;
     callback: UpdateViewCallback | null = null;
+    private calendarContainerEl: HTMLElement | null = null;
 
     constructor(
         leaf: WorkspaceLeaf,
@@ -80,12 +81,30 @@ export class CalendarView extends ItemView {
         return this.inSidebar ? "Full Calendar" : "Calendar";
     }
 
+    private applyGcalStyleVariables(): void {
+        const el = this.calendarContainerEl;
+        if (!el) return;
+        el.style.setProperty(
+            "--ofc-gcal-icon-color",
+            this.plugin.settings.gcalIconColor
+        );
+        el.style.setProperty(
+            "--ofc-gcal-border-color",
+            this.plugin.settings.gcalBorderColor
+        );
+        el.style.setProperty(
+            "--ofc-gcal-pattern-color",
+            this.plugin.settings.gcalPatternColor
+        );
+    }
+
     translateSources() {
+        const gcalStyle = this.plugin.settings.gcalEventVisualStyle;
         return this.plugin.cache.getAllEvents().map(
             ({ events, editable, color, id }): EventSourceInput => ({
                 id,
                 events: events.flatMap(
-                    (e) => toEventInput(e.id, e.event) || []
+                    (e) => toEventInput(e.id, e.event, id, gcalStyle) || []
                 ),
                 editable,
                 ...getCalendarColors(color),
@@ -105,7 +124,8 @@ export class CalendarView extends ItemView {
 
         const container = this.containerEl.children[1];
         container.empty();
-        let calendarEl = container.createEl("div");
+        const calendarEl = container.createEl("div");
+        this.calendarContainerEl = calendarEl;
 
         if (
             this.plugin.settings.calendarSources.filter(
@@ -297,6 +317,7 @@ export class CalendarView extends ItemView {
                 return true;
             },
         });
+        this.applyGcalStyleVariables();
         // @ts-ignore
         window.fc = this.fullCalendarView;
 
@@ -310,6 +331,7 @@ export class CalendarView extends ItemView {
         }
         this.callback = this.plugin.cache.on("update", (payload) => {
             if (payload.type === "resync") {
+                this.applyGcalStyleVariables();
                 this.fullCalendarView?.removeAllEventSources();
                 const sources = this.translateSources();
                 sources.forEach((source) =>
@@ -334,7 +356,12 @@ export class CalendarView extends ItemView {
                     }
                 });
                 toAdd.forEach(({ id, event, calendarId }) => {
-                    const eventInput = toEventInput(id, event);
+                    const eventInput = toEventInput(
+                        id,
+                        event,
+                        calendarId,
+                        this.plugin.settings.gcalEventVisualStyle
+                    );
                     console.debug("adding event", {
                         id,
                         event,
@@ -353,10 +380,12 @@ export class CalendarView extends ItemView {
                 } = payload;
                 console.debug("replacing calendar with id", payload.calendar);
                 this.fullCalendarView?.getEventSourceById(id)?.remove();
+                const gcalStyle = this.plugin.settings.gcalEventVisualStyle;
                 this.fullCalendarView?.addEventSource({
                     id,
                     events: events.flatMap(
-                        ({ id, event }) => toEventInput(id, event) || []
+                        ({ id: eid, event: ev }) =>
+                            toEventInput(eid, ev, id, gcalStyle) || []
                     ),
                     editable,
                     ...getCalendarColors(color),

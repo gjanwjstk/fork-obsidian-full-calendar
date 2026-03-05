@@ -3,14 +3,21 @@ import { CalendarInfo, OFCEvent } from "src/types";
 import { EventResponse } from "./Calendar";
 import RemoteCalendar from "./RemoteCalendar";
 import { GoogleAuthService } from "../auth/GoogleAuth";
+import {
+    hexToCalendarColorId,
+    hexToEventColorId,
+} from "../utils/googleColorMatch";
 
 const GOOGLE_CALENDAR_API_BASE =
     "https://www.googleapis.com/calendar/v3/calendars";
+const CALENDAR_LIST_API_BASE =
+    "https://www.googleapis.com/calendar/v3/users/me/calendarList";
 
 interface GoogleEvent {
     id: string;
     summary?: string;
     description?: string;
+    colorId?: string;
     start?: {
         dateTime?: string;
         date?: string;
@@ -205,6 +212,7 @@ export default class GoogleCalendar extends RemoteCalendar {
 
     /**
      * Convert OFCEvent to Google Calendar API event format.
+     * When syncEventColor is true and event has color, colorId will be resolved async by the caller.
      */
     private ofcToGoogleEvent(event: OFCEvent): Partial<GoogleEvent> {
         const gEvent: Partial<GoogleEvent> = {
@@ -250,15 +258,46 @@ export default class GoogleCalendar extends RemoteCalendar {
         return gEvent;
     }
 
+    /**
+     * Update the calendar color in Google Calendar (CalendarList) to match the given hex.
+     * Uses colorId matching for closest palette color.
+     */
+    async updateCalendarColor(hexColor: string): Promise<void> {
+        const token = await this.authService.getValidAccessToken();
+        const colorId = await hexToCalendarColorId(hexColor, token);
+        if (!colorId) return;
+
+        await requestUrl({
+            url: `${CALENDAR_LIST_API_BASE}/${encodeURIComponent(
+                this.calendarId
+            )}`,
+            method: "PATCH",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ colorId }),
+        });
+    }
+
     // --- Write operations ---
 
     /**
      * Create an event on Google Calendar.
      * Returns the Google event ID of the created event.
+     * @param syncEventColor When true, resolves event.color to colorId and syncs to Google
      */
-    async createGoogleEvent(event: OFCEvent): Promise<string> {
+    async createGoogleEvent(
+        event: OFCEvent,
+        syncEventColor = true
+    ): Promise<string> {
         const token = await this.authService.getValidAccessToken();
         const gEvent = this.ofcToGoogleEvent(event);
+
+        if (syncEventColor && event.color) {
+            const colorId = await hexToEventColorId(event.color, token);
+            if (colorId) gEvent.colorId = colorId;
+        }
 
         const response = await requestUrl({
             url: `${GOOGLE_CALENDAR_API_BASE}/${encodeURIComponent(
@@ -282,13 +321,20 @@ export default class GoogleCalendar extends RemoteCalendar {
 
     /**
      * Update an event on Google Calendar.
+     * @param syncEventColor When true, resolves event.color to colorId and syncs to Google
      */
     async updateGoogleEvent(
         googleEventId: string,
-        event: OFCEvent
+        event: OFCEvent,
+        syncEventColor = true
     ): Promise<void> {
         const token = await this.authService.getValidAccessToken();
         const gEvent = this.ofcToGoogleEvent(event);
+
+        if (syncEventColor && event.color) {
+            const colorId = await hexToEventColorId(event.color, token);
+            if (colorId) gEvent.colorId = colorId;
+        }
 
         const response = await requestUrl({
             url: `${GOOGLE_CALENDAR_API_BASE}/${encodeURIComponent(

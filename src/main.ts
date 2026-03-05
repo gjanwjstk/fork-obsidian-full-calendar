@@ -28,50 +28,57 @@ const GOOGLE_TOKENS_SECRET_KEY = "full-calendar-google-oauth-tokens";
 export default class FullCalendarPlugin extends Plugin {
     settings: FullCalendarSettings = DEFAULT_SETTINGS;
     googleAuth: GoogleAuthService | null = null;
-    cache: EventCache = new EventCache({
-        local: (info) =>
-            info.type === "local"
-                ? new FullNoteCalendar(
-                      new ObsidianIO(this.app),
-                      info.color,
-                      info.directory
-                  )
-                : null,
-        dailynote: (info) =>
-            info.type === "dailynote"
-                ? new DailyNoteCalendar(
-                      new ObsidianIO(this.app),
-                      info.color,
-                      info.heading
-                  )
-                : null,
-        ical: (info) =>
-            info.type === "ical" ? new ICSCalendar(info.color, info.url) : null,
-        caldav: (info) =>
-            info.type === "caldav"
-                ? new CalDAVCalendar(
-                      info.color,
-                      info.name,
-                      {
-                          type: "basic",
-                          username: info.username,
-                          password: info.password,
-                      },
-                      info.url,
-                      info.homeUrl
-                  )
-                : null,
-        gcal: (info) =>
-            info.type === "gcal" && this.googleAuth
-                ? new GoogleCalendar(
-                      info.color,
-                      info.name,
-                      info.calendarId,
-                      this.googleAuth
-                  )
-                : null,
-        FOR_TEST_ONLY: () => null,
-    });
+    cache: EventCache = new EventCache(
+        {
+            local: (info) =>
+                info.type === "local"
+                    ? new FullNoteCalendar(
+                          new ObsidianIO(this.app),
+                          info.color,
+                          info.directory
+                      )
+                    : null,
+            dailynote: (info) =>
+                info.type === "dailynote"
+                    ? new DailyNoteCalendar(
+                          new ObsidianIO(this.app),
+                          info.color,
+                          info.heading
+                      )
+                    : null,
+            ical: (info) =>
+                info.type === "ical"
+                    ? new ICSCalendar(info.color, info.url)
+                    : null,
+            caldav: (info) =>
+                info.type === "caldav"
+                    ? new CalDAVCalendar(
+                          info.color,
+                          info.name,
+                          {
+                              type: "basic",
+                              username: info.username,
+                              password: info.password,
+                          },
+                          info.url,
+                          info.homeUrl
+                      )
+                    : null,
+            gcal: (info) =>
+                info.type === "gcal" && this.googleAuth
+                    ? new GoogleCalendar(
+                          info.color,
+                          info.name,
+                          info.calendarId,
+                          this.googleAuth
+                      )
+                    : null,
+            FOR_TEST_ONLY: () => null,
+        },
+        {
+            getGcalEventColorSync: () => this.settings.gcalEventColorSync,
+        }
+    );
 
     renderCalendar = renderCalendar;
     processFrontmatter = toEventInput;
@@ -367,5 +374,23 @@ export default class FullCalendarPlugin extends Plugin {
         this.cache.reset(this.settings.calendarSources);
         await this.cache.populate();
         this.cache.resync();
+
+        if (
+            this.settings.gcalCalendarColorSync &&
+            this.googleAuth?.isAuthenticated
+        ) {
+            for (const cal of this.cache.calendars.values()) {
+                if (cal instanceof GoogleCalendar) {
+                    try {
+                        await cal.updateCalendarColor(cal.color);
+                    } catch (e) {
+                        console.warn(
+                            "Failed to sync calendar color to Google:",
+                            e
+                        );
+                    }
+                }
+            }
+        }
     }
 }

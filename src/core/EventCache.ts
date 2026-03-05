@@ -14,6 +14,10 @@ export type CalendarInitializerMap = Record<
     (info: CalendarInfo) => Calendar | null
 >;
 
+export type EventCacheOptions = {
+    getGcalEventColorSync?: () => boolean;
+};
+
 export type CacheEntry = { event: OFCEvent; id: string; calendarId: string };
 
 export type UpdateViewCallback = (
@@ -149,6 +153,8 @@ export default class EventCache {
 
     private calendarInitializers: CalendarInitializerMap;
 
+    private getGcalEventColorSync: () => boolean;
+
     private store = new EventStore();
     calendars = new Map<string, Calendar>();
 
@@ -166,8 +172,13 @@ export default class EventCache {
 
     lastRevalidation: number = 0;
 
-    constructor(calendarInitializers: CalendarInitializerMap) {
+    constructor(
+        calendarInitializers: CalendarInitializerMap,
+        options?: EventCacheOptions
+    ) {
         this.calendarInitializers = calendarInitializers;
+        this.getGcalEventColorSync =
+            options?.getGcalEventColorSync ?? (() => true);
     }
 
     /**
@@ -389,7 +400,10 @@ export default class EventCache {
 
         // Handle Google Calendar
         if (calendar instanceof GoogleCalendar) {
-            const googleEventId = await calendar.createGoogleEvent(event);
+            const googleEventId = await calendar.createGoogleEvent(
+                event,
+                this.getGcalEventColorSync()
+            );
             const eventWithId = { ...event, id: googleEventId };
             const id = this.store.add({
                 calendar,
@@ -478,7 +492,11 @@ export default class EventCache {
                     googleEventId
                 );
 
-                await calendar.updateGoogleEvent(googleEventId, newEvent);
+                await calendar.updateGoogleEvent(
+                    googleEventId,
+                    newEvent,
+                    this.getGcalEventColorSync()
+                );
 
                 const updatedEvent = { ...newEvent, id: googleEventId };
                 this.store.delete(eventId);

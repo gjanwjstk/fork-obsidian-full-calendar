@@ -9,6 +9,7 @@ import {
     TFolder,
 } from "obsidian";
 import { makeDefaultPartialCalendarSource, CalendarInfo } from "../types";
+import { toHexForColorInput } from "../colorUtils";
 import { CalendarSettings } from "./components/CalendarSetting";
 import { AddCalendarSource } from "./components/AddCalendarSource";
 import * as ReactDOM from "react-dom";
@@ -17,6 +18,13 @@ import { getDailyNoteSettings } from "obsidian-daily-notes-interface";
 import ReactModal from "./ReactModal";
 import { importCalendars } from "src/calendars/parsing/caldav/import";
 import { GoogleAuthService } from "../auth/GoogleAuth";
+
+export type GcalEventVisualStyle =
+    | "icon"
+    | "border"
+    | "badge"
+    | "pattern"
+    | "none";
 
 export interface FullCalendarSettings {
     calendarSources: CalendarInfo[];
@@ -35,6 +43,12 @@ export interface FullCalendarSettings {
     googleRefreshToken: string;
     googleAccessToken: string;
     googleTokenExpiry: number;
+    gcalEventVisualStyle: GcalEventVisualStyle;
+    gcalCalendarColorSync: boolean;
+    gcalEventColorSync: boolean;
+    gcalIconColor: string;
+    gcalBorderColor: string;
+    gcalPatternColor: string;
 }
 
 export const DEFAULT_SETTINGS: FullCalendarSettings = {
@@ -54,6 +68,12 @@ export const DEFAULT_SETTINGS: FullCalendarSettings = {
     googleRefreshToken: "",
     googleAccessToken: "",
     googleTokenExpiry: 0,
+    gcalEventVisualStyle: "icon",
+    gcalCalendarColorSync: true,
+    gcalEventColorSync: true,
+    gcalIconColor: "#4285f4",
+    gcalBorderColor: "#4285f4",
+    gcalPatternColor: "#000000",
 };
 
 const WEEKDAYS = [
@@ -403,6 +423,128 @@ export class FullCalendarSettingTab extends PluginSettingTab {
                     });
             });
         }
+
+        const GCAL_VISUAL_STYLE_OPTIONS: Record<GcalEventVisualStyle, string> =
+            {
+                icon: "아이콘/도트",
+                border: "테두리",
+                badge: "배지",
+                pattern: "배경 패턴",
+                none: "없음",
+            };
+
+        new Setting(containerEl)
+            .setName("구글 캘린더 이벤트 시각적 구분")
+            .setDesc(
+                "캘린더에서 구글 캘린더 이벤트를 구분하는 방식을 선택합니다."
+            )
+            .addDropdown((dropdown) => {
+                (
+                    Object.entries(GCAL_VISUAL_STYLE_OPTIONS) as [
+                        GcalEventVisualStyle,
+                        string
+                    ][]
+                ).forEach(([value, label]) => {
+                    dropdown.addOption(value, label);
+                });
+                dropdown.setValue(this.plugin.settings.gcalEventVisualStyle);
+                dropdown.onChange(async (val) => {
+                    this.plugin.settings.gcalEventVisualStyle =
+                        val as GcalEventVisualStyle;
+                    updateColorPickerVisibility(
+                        this.plugin.settings.gcalEventVisualStyle
+                    );
+                    await this.plugin.saveSettings();
+                });
+            });
+
+        const updateColorPickerVisibility = (style: GcalEventVisualStyle) => {
+            iconColorSetting.settingEl.style.display =
+                style === "icon" ? "" : "none";
+            borderColorSetting.settingEl.style.display =
+                style === "border" ? "" : "none";
+            patternColorSetting.settingEl.style.display =
+                style === "pattern" ? "" : "none";
+        };
+
+        const iconColorSetting = new Setting(containerEl)
+            .setName("아이콘/도트 색상")
+            .setDesc("아이콘/도트 형식 선택 시 사용할 색상입니다.")
+            .addText((text) => {
+                const input = text.inputEl;
+                input.type = "color";
+                input.style.minWidth = "3rem";
+                input.style.maxWidth = "25%";
+                input.value = toHexForColorInput(
+                    this.plugin.settings.gcalIconColor
+                );
+                input.onchange = async () => {
+                    this.plugin.settings.gcalIconColor = input.value;
+                    await this.plugin.saveSettings();
+                };
+            });
+
+        const borderColorSetting = new Setting(containerEl)
+            .setName("테두리 색상")
+            .setDesc("테두리 형식 선택 시 사용할 색상입니다.")
+            .addText((text) => {
+                const input = text.inputEl;
+                input.type = "color";
+                input.style.minWidth = "3rem";
+                input.style.maxWidth = "25%";
+                input.value = toHexForColorInput(
+                    this.plugin.settings.gcalBorderColor
+                );
+                input.onchange = async () => {
+                    this.plugin.settings.gcalBorderColor = input.value;
+                    await this.plugin.saveSettings();
+                };
+            });
+
+        const patternColorSetting = new Setting(containerEl)
+            .setName("배경 패턴 색상")
+            .setDesc("배경 패턴 형식 선택 시 사용할 색상입니다.")
+            .addText((text) => {
+                const input = text.inputEl;
+                input.type = "color";
+                input.style.minWidth = "3rem";
+                input.style.maxWidth = "25%";
+                input.value = toHexForColorInput(
+                    this.plugin.settings.gcalPatternColor
+                );
+                input.onchange = async () => {
+                    this.plugin.settings.gcalPatternColor = input.value;
+                    await this.plugin.saveSettings();
+                };
+            });
+
+        updateColorPickerVisibility(this.plugin.settings.gcalEventVisualStyle);
+
+        new Setting(containerEl)
+            .setName("캘린더 색상 구글 동기화")
+            .setDesc(
+                "설정에서 변경한 캘린더 색상을 구글 캘린더에 동기화합니다 (가장 비슷한 색으로)."
+            )
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.gcalCalendarColorSync);
+                toggle.onChange(async (val) => {
+                    this.plugin.settings.gcalCalendarColorSync = val;
+                    await this.plugin.saveSettings();
+                });
+            });
+
+        new Setting(containerEl)
+            .setName("일정 색상 구글 동기화")
+            .setDesc(
+                "일정별 색상을 구글 캘린더에 반영합니다 (가장 비슷한 색으로)."
+            )
+            .addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.gcalEventColorSync);
+                toggle.onChange(async (val) => {
+                    this.plugin.settings.gcalEventColorSync = val;
+                    await this.plugin.saveSettings();
+                });
+            });
 
         containerEl.createEl("h2", { text: "Manage Calendars" });
         addCalendarButton(

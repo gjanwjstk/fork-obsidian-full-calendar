@@ -80,3 +80,99 @@
 	border-color: black !important;
 	border-width: 1px !important;
 }
+
+/* Google Calendar event visual distinction */
+
+/* Icon: [icon] schedule name - same line */
+.ofc-gcal-event.ofc-gcal-icon {
+	display: flex !important;
+	flex-direction: row !important;
+	align-items: center !important;
+	flex-wrap: nowrap !important;
+}
+.ofc-gcal-event.ofc-gcal-icon::before {
+	content: "";
+	flex-shrink: 0;
+	width: 6px;
+	height: 6px;
+	min-width: 6px;
+	border-radius: 50%;
+	background: var(--ofc-gcal-icon-color, #4285f4);
+	margin-right: 6px;
+}
+.ofc-gcal-event.ofc-gcal-icon .fc-event-main,
+.ofc-gcal-event.ofc-gcal-icon .fc-event-main-frame {
+	display: flex !important;
+	flex-direction: row !important;
+	align-items: center !important;
+	flex-wrap: nowrap !important;
+	min-width: 0;
+}
+.ofc-gcal-event.ofc-gcal-icon .fc-event-time,
+.ofc-gcal-event.ofc-gcal-icon .fc-event-title,
+.ofc-gcal-event.ofc-gcal-icon .fc-event-title-container {
+	display: inline !important;
+	white-space: nowrap;
+}
+.ofc-gcal-event.ofc-gcal-icon .fc-list-event-title {
+	display: inline-flex !important;
+	align-items: center !important;
+	flex-wrap: nowrap !important;
+}
+
+.ofc-gcal-event.ofc-gcal-border {
+	border-style: dashed !important;
+	border-width: 2px !important;
+	border-color: var(--ofc-gcal-border-color, #4285f4) !important;
+}
+
+/* Badge: [badge] schedule name - badge first, complementary color */
+.ofc-gcal-event.ofc-gcal-badge {
+	display: flex !important;
+	flex-direction: row !important;
+	align-items: center !important;
+	flex-wrap: nowrap !important;
+}
+.ofc-gcal-event.ofc-gcal-badge::before {
+	content: "G";
+	flex-shrink: 0;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	font-size: 0.8em;
+	font-weight: 700;
+	min-width: 1.3em;
+	height: 1.3em;
+	line-height: 1;
+	padding: 0 4px;
+	margin-right: 6px;
+	border-radius: 4px;
+	/* Complementary: inherit event bg, hue-rotate for opposite on color wheel */
+	background: inherit;
+	filter: hue-rotate(180deg) saturate(1.3) brightness(1.15);
+	color: inherit;
+}
+.ofc-gcal-event.ofc-gcal-badge .fc-event-main,
+.ofc-gcal-event.ofc-gcal-badge .fc-event-main-frame {
+	display: flex !important;
+	flex-direction: row !important;
+	align-items: center !important;
+	flex-wrap: nowrap !important;
+	min-width: 0;
+}
+.ofc-gcal-event.ofc-gcal-badge .fc-event-time,
+.ofc-gcal-event.ofc-gcal-badge .fc-event-title,
+.ofc-gcal-event.ofc-gcal-badge .fc-event-title-container {
+	display: inline !important;
+	white-space: nowrap;
+}
+
+.ofc-gcal-event.ofc-gcal-pattern {
+	background-image: repeating-linear-gradient(
+		-45deg,
+		transparent,
+		transparent 2px,
+		color-mix(in srgb, var(--ofc-gcal-pattern-color, #000) 12%, transparent) 2px,
+		color-mix(in srgb, var(--ofc-gcal-pattern-color, #000) 12%, transparent) 4px
+	) !important;
+}

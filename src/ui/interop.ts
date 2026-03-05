@@ -1,5 +1,6 @@
 import { EventApi, EventInput } from "@fullcalendar/core";
 import { OFCEvent } from "../types";
+import type { GcalEventVisualStyle } from "./settings";
 
 import { DateTime, Duration } from "luxon";
 import { rrulestr } from "rrule";
@@ -104,12 +105,21 @@ export function dateEndpointsToFrontmatter(
 
 export function toEventInput(
     id: string,
-    frontmatter: OFCEvent
+    frontmatter: OFCEvent,
+    calendarId?: string,
+    gcalVisualStyle?: GcalEventVisualStyle
 ): EventInput | null {
+    const calendarType = calendarId?.startsWith("gcal::") ? "gcal" : undefined;
+    const gcalClassNames: string[] =
+        calendarType === "gcal" && gcalVisualStyle && gcalVisualStyle !== "none"
+            ? ["ofc-gcal-event", "ofc-gcal-" + gcalVisualStyle]
+            : [];
+
     let event: EventInput = {
         id,
         title: frontmatter.title,
         allDay: frontmatter.allDay,
+        ...(gcalClassNames.length > 0 ? { classNames: gcalClassNames } : {}),
     };
     if (frontmatter.type === "recurring") {
         event = {
@@ -161,6 +171,7 @@ export function toEventInput(
             .flatMap((d) => (d ? d : []));
 
         event = {
+            ...event,
             id,
             title: frontmatter.title,
             allDay: frontmatter.allDay,

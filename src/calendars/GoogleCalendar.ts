@@ -15,6 +15,7 @@ const CALENDAR_LIST_API_BASE =
 
 interface GoogleEvent {
     id: string;
+    iCalUID?: string;
     summary?: string;
     description?: string;
     colorId?: string;
@@ -159,6 +160,7 @@ export default class GoogleCalendar extends RemoteCalendar {
 
         const title = gEvent.summary || "(No title)";
         const id = gEvent.id;
+        const uid = gEvent.iCalUID ?? gEvent.id;
         const ofcColor =
             gEvent.extendedProperties?.private?.ofcColor ?? undefined;
 
@@ -167,6 +169,7 @@ export default class GoogleCalendar extends RemoteCalendar {
             return {
                 title,
                 id,
+                uid,
                 type: "single",
                 allDay: true,
                 date: gEvent.start.date,
@@ -196,6 +199,7 @@ export default class GoogleCalendar extends RemoteCalendar {
             return {
                 title,
                 id,
+                uid,
                 type: "single",
                 allDay: false,
                 date,

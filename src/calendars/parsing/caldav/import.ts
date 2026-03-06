@@ -2,6 +2,7 @@ import Color from "color";
 import dav from "dav";
 import * as transport from "./transport";
 import { Authentication, CalDAVSource } from "src/types";
+import { getAccentColorHex } from "src/utils/colorUtils";
 
 export async function importCalendars(
     auth: Authentication,
@@ -47,7 +48,7 @@ export async function importCalendars(
                 name: c.name,
                 url,
                 homeUrl: c.url,
-                color: c.color || (null as any), // TODO: handle null colors in the type system.
+                color: c.color ?? getAccentColorHex(),
                 username: auth.username,
                 password: auth.password,
             }));

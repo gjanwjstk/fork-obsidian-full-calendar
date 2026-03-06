@@ -1,7 +1,7 @@
 import { CalendarInfo } from "./calendar_settings";
 
 export type { OFCEvent } from "./schema";
-export { validateEvent } from "./schema";
+export { validateEvent, generateEventUid } from "./schema";
 
 export { makeDefaultPartialCalendarSource } from "./calendar_settings";
 export type { CalendarInfo } from "./calendar_settings";
@@ -27,3 +27,4 @@ export type Authentication = {
 };
 
 export type CalDAVSource = Extract<CalendarInfo, { type: "caldav" }>;
+export type GcalSource = Extract<CalendarInfo, { type: "gcal" }>;

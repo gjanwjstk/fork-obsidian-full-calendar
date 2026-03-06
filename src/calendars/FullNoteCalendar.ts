@@ -2,7 +2,12 @@ import { TFile, TFolder, parseYaml } from "obsidian";
 import { rrulestr } from "rrule";
 import { EventPathLocation } from "../core/EventStore";
 import { ObsidianInterface } from "../ObsidianAdapter";
-import { OFCEvent, EventLocation, validateEvent } from "../types";
+import {
+    OFCEvent,
+    EventLocation,
+    validateEvent,
+    generateEventUid,
+} from "../types";
 import { EditableCalendar, EditableEventResponse } from "./EditableCalendar";
 
 const basenameFromEvent = (event: OFCEvent): string => {
@@ -278,7 +283,10 @@ export default class FullNoteCalendar extends EditableCalendar {
     }
 
     async createEvent(event: OFCEvent): Promise<EventLocation> {
-        const baseFilename = filenameForEvent(event);
+        const eventWithUid: OFCEvent = event.uid
+            ? event
+            : { ...event, uid: generateEventUid() };
+        const baseFilename = filenameForEvent(eventWithUid);
         let path = joinVaultPath(this.directory, baseFilename);
         let suffix = 2;
         const baseNameWithoutExt = baseFilename.replace(/\.md$/, "");
@@ -289,7 +297,7 @@ export default class FullNoteCalendar extends EditableCalendar {
             );
             suffix += 1;
         }
-        const file = await this.app.create(path, newFrontmatter(event));
+        const file = await this.app.create(path, newFrontmatter(eventWithUid));
         return { file, lineNumber: undefined };
     }
 

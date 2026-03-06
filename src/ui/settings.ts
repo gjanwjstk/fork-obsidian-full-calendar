@@ -9,7 +9,7 @@ import {
     TFolder,
 } from "obsidian";
 import { makeDefaultPartialCalendarSource, CalendarInfo } from "../types";
-import { toHexForColorInput } from "../colorUtils";
+import { toHexForColorInput } from "../utils/colorUtils";
 import { CalendarSettings } from "./components/CalendarSetting";
 import { AddCalendarSource } from "./components/AddCalendarSource";
 import * as ReactDOM from "react-dom";
@@ -217,9 +217,12 @@ export function addCalendarButton(
                                         submitCallback(source)
                                     );
                                 } catch (e) {
-                                    if (e instanceof Error) {
-                                        new Notice(e.message);
-                                    }
+                                    const msg =
+                                        e instanceof Error
+                                            ? e.message
+                                            : "Failed to import CalDAV calendars";
+                                    console.error("CalDAV import failed:", e);
+                                    new Notice(msg);
                                 }
                             } else {
                                 submitCallback(source);
@@ -399,9 +402,12 @@ export class FullCalendarSettingTab extends PluginSettingTab {
                             await this.plugin.googleAuth?.revokeAuth();
                             this.display();
                         } catch (e) {
-                            if (e instanceof Error) {
-                                new Notice(e.message);
-                            }
+                            const msg =
+                                e instanceof Error
+                                    ? e.message
+                                    : "Failed to revoke authorization";
+                            console.error("Revoke auth failed:", e);
+                            new Notice(msg);
                         }
                     });
             });
@@ -416,9 +422,12 @@ export class FullCalendarSettingTab extends PluginSettingTab {
                             await this.plugin.googleAuth?.startAuthFlow();
                             this.display();
                         } catch (e) {
-                            if (e instanceof Error) {
-                                new Notice(e.message);
-                            }
+                            const msg =
+                                e instanceof Error
+                                    ? e.message
+                                    : "Failed to authorize Google Calendar";
+                            console.error("Google auth failed:", e);
+                            new Notice(msg);
                         }
                     });
             });

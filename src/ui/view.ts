@@ -4,6 +4,7 @@ import { Calendar, EventSourceInput } from "@fullcalendar/core";
 import { renderCalendar } from "./calendar";
 import FullCalendarPlugin from "../main";
 import { FCError, PLUGIN_SLUG } from "../types";
+import { hexToRgb } from "../utils/colorUtils";
 import {
     dateEndpointsToFrontmatter,
     fromEventApi,
@@ -26,13 +27,9 @@ function getCalendarColors(color: string | null | undefined): {
         "--text-on-accent"
     );
     if (color) {
-        const m = color
-            .slice(1)
-            .match(color.length == 7 ? /(\S{2})/g : /(\S{1})/g);
-        if (m) {
-            const r = parseInt(m[0], 16),
-                g = parseInt(m[1], 16),
-                b = parseInt(m[2], 16);
+        const rgb = hexToRgb(color);
+        if (rgb) {
+            const [r, g, b] = rgb;
             const brightness = (r * 299 + g * 587 + b * 114) / 1000;
             if (brightness > 150) {
                 textVar = "black";
@@ -203,9 +200,10 @@ export class CalendarView extends ItemView {
                         fromEventApi(newEvent)
                     );
                     return !!didModify;
-                } catch (e: any) {
+                } catch (e: unknown) {
                     console.error(e);
-                    new Notice(e.message);
+                    const msg = e instanceof Error ? e.message : String(e);
+                    new Notice(msg);
                     return false;
                 }
             },
@@ -225,7 +223,12 @@ export class CalendarView extends ItemView {
                             sourcePath: location.path,
                         });
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.debug(
+                        "Hover link: could not get event location",
+                        e instanceof Error ? e.message : e
+                    );
+                }
             },
             firstDay: this.plugin.settings.firstDay,
             initialView: this.plugin.settings.initialView,

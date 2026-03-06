@@ -317,6 +317,27 @@ export default class FullCalendarPlugin extends Plugin {
         });
 
         this.addCommand({
+            id: "full-calendar-assign-uids",
+            name: "Assign UIDs to events without UID",
+            callback: async () => {
+                try {
+                    const count =
+                        await this.cache.assignUidsToEventsWithoutUid();
+                    new Notice(
+                        count > 0
+                            ? `UID 할당 완료: ${count}개 이벤트에 UID를 부여했습니다.`
+                            : "UID가 없는 이벤트가 없습니다."
+                    );
+                } catch (e) {
+                    console.error(e);
+                    new Notice(
+                        e instanceof Error ? e.message : "UID 할당 중 오류 발생"
+                    );
+                }
+            },
+        });
+
+        this.addCommand({
             id: "full-calendar-open",
             name: "Open Calendar",
             callback: () => {

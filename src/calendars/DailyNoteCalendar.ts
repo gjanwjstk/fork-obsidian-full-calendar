@@ -1,4 +1,5 @@
 import moment from "moment";
+import { Notice } from "obsidian";
 import {
     TFile,
     CachedMetadata,
@@ -17,7 +18,13 @@ import {
 } from "obsidian-daily-notes-interface";
 import { EventPathLocation } from "../core/EventStore";
 import { ObsidianInterface } from "../ObsidianAdapter";
-import { OFCEvent, EventLocation, CalendarInfo, validateEvent } from "../types";
+import {
+    OFCEvent,
+    EventLocation,
+    CalendarInfo,
+    validateEvent,
+    generateEventUid,
+} from "../types";
 import { EventResponse } from "./Calendar";
 import { EditableCalendar, EditableEventResponse } from "./EditableCalendar";
 
@@ -374,7 +381,19 @@ export default class DailyNoteCalendar extends EditableCalendar {
             );
             throw new Error("Cannot create a recurring event in a daily note.");
         }
-        const m = moment(event.date);
+        if (event.endDate) {
+            new Notice(
+                "멀티데이 이벤트는 데일리 노트에서 시작일 기준으로 저장됩니다."
+            );
+        }
+        const eventForDailyNote: OFCEvent = {
+            ...event,
+            endDate: null,
+        };
+        const eventWithUid: OFCEvent = eventForDailyNote.uid
+            ? eventForDailyNote
+            : { ...eventForDailyNote, uid: generateEventUid() };
+        const m = moment(eventWithUid.date);
         let file = getDailyNote(m, getAllDailyNotes()) as TFile;
         if (!file) {
             file = (await createDailyNote(m)) as TFile;
@@ -387,7 +406,7 @@ export default class DailyNoteCalendar extends EditableCalendar {
         let lineNumber = await this.app.rewrite(file, (contents) => {
             const { page, lineNumber } = addToHeading(contents, {
                 heading: headingInfo ?? undefined,
-                item: event,
+                item: eventWithUid,
                 headingText: this.heading,
             });
             return [page, lineNumber] as [string, number];
@@ -431,10 +450,14 @@ export default class DailyNoteCalendar extends EditableCalendar {
             );
         }
         if (newEvent.endDate) {
-            throw new Error(
-                "Multi-day events are not supported in daily notes."
+            new Notice(
+                "멀티데이 이벤트는 데일리 노트에서 시작일 기준으로 저장됩니다."
             );
         }
+        const eventForDailyNote: OFCEvent = {
+            ...newEvent,
+            endDate: null,
+        };
         const { file, lineNumber } = this.getConcreteLocation(loc);
         const oldDate = getDateFromFile(file as any, "day")?.format(
             DATE_FORMAT
@@ -471,7 +494,7 @@ export default class DailyNoteCalendar extends EditableCalendar {
                     // Before writing that change back to disk, open the new file and add the event.
                     const { page, lineNumber } = addToHeading(newFileContents, {
                         heading: headingInfo ?? undefined,
-                        item: newEvent,
+                        item: eventForDailyNote,
                         headingText: this.heading,
                     });
                     // Before any file changes are committed, call the updateCacheWithLocation callback to ensure
@@ -486,7 +509,10 @@ export default class DailyNoteCalendar extends EditableCalendar {
             await this.app.rewrite(file, (contents) => {
                 const lines = contents.split("\n");
                 let targetLineIndex = lineNumber;
-                let newLine = modifyListItem(lines[lineNumber], newEvent);
+                let newLine = modifyListItem(
+                    lines[lineNumber],
+                    eventForDailyNote
+                );
 
                 if (!newLine) {
                     // 캐시된 lineNumber가 잘못됐을 수 있음(파일 수정 등) → 제목+startTime으로 재탐색
@@ -517,7 +543,7 @@ export default class DailyNoteCalendar extends EditableCalendar {
                         targetLineIndex = fallbackIndex;
                         newLine = modifyListItem(
                             lines[fallbackIndex],
-                            newEvent
+                            eventForDailyNote
                         );
                         updateCacheWithLocation({
                             file,

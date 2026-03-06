@@ -4,7 +4,12 @@ import equal from "deep-equal";
 import { Calendar } from "../calendars/Calendar";
 import { EditableCalendar } from "../calendars/EditableCalendar";
 import EventStore, { StoredEvent } from "./EventStore";
-import { CalendarInfo, OFCEvent, validateEvent } from "../types";
+import {
+    CalendarInfo,
+    OFCEvent,
+    validateEvent,
+    generateEventUid,
+} from "../types";
 import RemoteCalendar from "../calendars/RemoteCalendar";
 import FullNoteCalendar from "../calendars/FullNoteCalendar";
 import GoogleCalendar from "../calendars/GoogleCalendar";
@@ -67,7 +72,6 @@ function eventSortKey(e: OFCEvent): string {
     return `${e.title}|${date}|${time}`;
 }
 
-// TODO: Write tests for this function.
 export const eventsAreDifferent = (
     oldEvents: OFCEvent[],
     newEvents: OFCEvent[]
@@ -106,8 +110,10 @@ export const eventsAreDifferent = (
 /**
  * Create a stable key for matching events (same file, same semantic identity).
  * Used to preserve cache IDs when refreshing from disk.
+ * UID takes precedence; otherwise title|type|date|startTime|endTime for single timed events.
  */
 function eventMatchKey(e: OFCEvent): string {
+    if (e.uid) return `uid:${e.uid}`;
     const date =
         e.type === "single"
             ? e.date
@@ -116,7 +122,14 @@ function eventMatchKey(e: OFCEvent): string {
             : e.type === "rrule"
             ? e.startDate
             : "";
-    return `${e.title}|${e.type || "single"}|${date || ""}`;
+    const time =
+        e.type === "single" &&
+        !e.allDay &&
+        "startTime" in e &&
+        (e.startTime || e.endTime)
+            ? `|${e.startTime ?? ""}|${e.endTime ?? ""}`
+            : "";
+    return `${e.title}|${e.type || "single"}|${date || ""}${time}`;
 }
 
 export type CachedEvent = Pick<StoredEvent, "event" | "id">;
@@ -578,6 +591,28 @@ export default class EventCache {
      * @param process function to transform the event.
      * @returns true if the update was successful.
      */
+    /**
+     * Assign UIDs to local events that don't have one.
+     * Returns the number of events updated.
+     */
+    async assignUidsToEventsWithoutUid(): Promise<number> {
+        let count = 0;
+        const eventsByCalendar = this.store.eventsByCalendar;
+        for (const [calId, events] of eventsByCalendar) {
+            const calendar = this.calendars.get(calId);
+            if (!(calendar instanceof EditableCalendar)) continue;
+            for (const { id, event, location } of events) {
+                if (event.uid || !location) continue;
+                const ok = await this.updateEventWithId(id, {
+                    ...event,
+                    uid: generateEventUid(),
+                });
+                if (ok) count++;
+            }
+        }
+        return count;
+    }
+
     processEvent(
         id: string,
         process: (e: OFCEvent) => OFCEvent
@@ -594,20 +629,41 @@ export default class EventCache {
     async moveEventToCalendar(
         eventId: string,
         newCalendarId: string,
-        eventData?: OFCEvent
+        eventData?: OFCEvent,
+        sourceCalendarId?: string
     ): Promise<void> {
         const event = this.store.getEventById(eventId);
         const details = this.store.getEventDetails(eventId);
 
         // Event may have been removed by revalidation (e.g. Google Calendar refresh) while
-        // the edit modal was open. If we have eventData from the modal, add to target and skip delete.
+        // the edit modal was open. If we have eventData from the modal, add to target and delete from source.
         if (!details || !event) {
             if (eventData) {
                 console.debug(
                     `Event ${eventId} not in store (likely removed by revalidation); adding form data to ${newCalendarId}`
                 );
+                // Preserve uid; only discard id (cache/API id) when moving to new calendar
                 const { id: _discardId, ...dataWithoutId } = eventData;
                 await this.addEvent(newCalendarId, dataWithoutId as OFCEvent);
+                // Delete from source calendar if it was Google (prevents duplication)
+                if (sourceCalendarId?.startsWith("gcal::") && eventData.id) {
+                    const sourceCal = this.calendars.get(sourceCalendarId);
+                    if (sourceCal instanceof GoogleCalendar) {
+                        try {
+                            await sourceCal.deleteGoogleEvent(eventData.id);
+                        } catch (apiErr: unknown) {
+                            const msg =
+                                apiErr instanceof Error
+                                    ? apiErr.message
+                                    : String(apiErr);
+                            if (msg.includes("410")) return;
+                            console.warn(
+                                "Failed to delete from Google after move:",
+                                apiErr
+                            );
+                        }
+                    }
+                }
                 return;
             }
             throw new Error(

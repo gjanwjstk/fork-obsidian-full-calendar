@@ -10,6 +10,7 @@ import EventCache, {
     CacheEntry,
     CalendarInitializerMap,
     OFCEventSource,
+    eventsAreDifferent,
 } from "./EventCache";
 import { EventPathLocation } from "./EventStore";
 
@@ -670,6 +671,69 @@ describe("editable calendars", () => {
             }
         );
         it.todo("updates when events are the same but locations are different");
+    });
+
+    describe("eventsAreDifferent", () => {
+        const singleEvent = (title: string, date: string): OFCEvent =>
+            ({
+                title,
+                type: "single",
+                date,
+                allDay: true,
+            } as OFCEvent);
+
+        it("returns false when events are identical", () => {
+            const events = [
+                singleEvent("Meeting", "2024-01-15"),
+                singleEvent("Lunch", "2024-01-16"),
+            ];
+            expect(eventsAreDifferent(events, events)).toBe(false);
+            expect(eventsAreDifferent(events, [...events])).toBe(false);
+        });
+
+        it("returns false when events are same but in different order", () => {
+            const a = [
+                singleEvent("A", "2024-01-15"),
+                singleEvent("B", "2024-01-16"),
+            ];
+            const b = [
+                singleEvent("B", "2024-01-16"),
+                singleEvent("A", "2024-01-15"),
+            ];
+            expect(eventsAreDifferent(a, b)).toBe(false);
+        });
+
+        it("returns true when event count differs", () => {
+            const a = [singleEvent("A", "2024-01-15")];
+            const b = [
+                singleEvent("A", "2024-01-15"),
+                singleEvent("B", "2024-01-16"),
+            ];
+            expect(eventsAreDifferent(a, b)).toBe(true);
+            expect(eventsAreDifferent(b, a)).toBe(true);
+        });
+
+        it("returns true when event content differs", () => {
+            const a = [singleEvent("Meeting", "2024-01-15")];
+            const b = [singleEvent("Meeting", "2024-01-16")];
+            expect(eventsAreDifferent(a, b)).toBe(true);
+        });
+
+        it("returns false when only color case differs", () => {
+            const a = [
+                {
+                    ...singleEvent("A", "2024-01-15"),
+                    color: "#1F3A8A",
+                } as OFCEvent,
+            ];
+            const b = [
+                {
+                    ...singleEvent("A", "2024-01-15"),
+                    color: "#1f3a8a",
+                } as OFCEvent,
+            ];
+            expect(eventsAreDifferent(a, b)).toBe(false);
+        });
     });
 
     describe("make sure cache is populated before doing anything", () => {});

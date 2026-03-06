@@ -2,7 +2,7 @@ import { Notice } from "obsidian";
 import * as React from "react";
 
 import { CalendarInfo } from "../../types";
-import { toHexForColorInput } from "../../colorUtils";
+import { toHexForColorInput } from "../../utils/colorUtils";
 
 type SourceWith<T extends Partial<CalendarInfo>, K> = T extends K ? T : never;
 

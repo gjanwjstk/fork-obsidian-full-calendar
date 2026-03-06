@@ -2,9 +2,15 @@ import { join } from "path";
 import { TFile } from "obsidian";
 
 import { ObsidianInterface } from "src/ObsidianAdapter";
+
+jest.mock("../types", () => ({
+    ...jest.requireActual("../types"),
+    generateEventUid: () => "test-uid-12345@fullcalendar.local",
+}));
+
+import { OFCEvent } from "../types";
 import { MockApp, MockAppBuilder } from "../../test_helpers/AppBuilder";
 import { FileBuilder } from "../../test_helpers/FileBuilder";
-import { OFCEvent } from "src/types";
 import FullNoteCalendar from "./FullNoteCalendar";
 import { parseEvent } from "../types/schema";
 
@@ -191,6 +197,7 @@ describe("Note Calendar Tests", () => {
             type: single
             date: 2022-01-01
             endDate: null
+            uid: test-uid-12345@fullcalendar.local
             ---
             ",
             ]

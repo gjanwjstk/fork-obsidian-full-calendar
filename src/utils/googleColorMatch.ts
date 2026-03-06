@@ -3,6 +3,7 @@
  * Fetches the Colors API palette and finds the closest colorId for a given hex.
  */
 import { requestUrl } from "obsidian";
+import { hexToRgb } from "./colorUtils";
 
 const COLORS_API_URL = "https://www.googleapis.com/calendar/v3/colors";
 
@@ -18,14 +19,6 @@ interface ColorsResponse {
 
 let cachedCalendarPalette: Record<string, string> | null = null;
 let cachedEventPalette: Record<string, string> | null = null;
-
-function hexToRgb(hex: string): [number, number, number] | null {
-    const m = hex
-        .replace(/^#/, "")
-        .match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
-    if (!m) return null;
-    return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
-}
 
 function rgbDistance(
     a: [number, number, number],

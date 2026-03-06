@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useState } from "react";
-import { CalendarInfo } from "../../types";
-import { toHexForColorInput } from "../../colorUtils";
+import { CalendarInfo, GcalSource } from "../../types";
+import { toHexForColorInput } from "../../utils/colorUtils";
 
 type ChangeListener = <T extends Partial<CalendarInfo>>(
     fromString: (val: string) => T
@@ -217,17 +217,13 @@ function PasswordInput<T extends Partial<CalendarInfo>>({
     );
 }
 
-function GoogleCalendarSelect<T extends Partial<CalendarInfo>>({
+function GoogleCalendarSelect({
     source,
     changeListener,
     googleCalendars,
-}: BasicProps<T> & {
+}: BasicProps<Partial<GcalSource>> & {
     googleCalendars: Array<{ id: string; summary: string; primary: boolean }>;
 }) {
-    let sourceWithGcal = source as SourceWith<
-        T,
-        { calendarId: undefined; name: undefined }
-    >;
     return (
         <>
             <div className="setting-item">
@@ -241,15 +237,15 @@ function GoogleCalendarSelect<T extends Partial<CalendarInfo>>({
                     {googleCalendars.length > 0 ? (
                         <select
                             required
-                            value={(sourceWithGcal as any).calendarId || ""}
+                            value={source.calendarId ?? ""}
                             onChange={(e) => {
                                 const selected = googleCalendars.find(
                                     (c) => c.id === e.target.value
                                 );
                                 changeListener((x) => ({
-                                    ...sourceWithGcal,
+                                    ...source,
                                     calendarId: x,
-                                    name: selected?.summary || x,
+                                    name: selected?.summary ?? x,
                                 }))(e);
                             }}
                         >
@@ -268,9 +264,9 @@ function GoogleCalendarSelect<T extends Partial<CalendarInfo>>({
                             required
                             type="text"
                             placeholder="Calendar ID (e.g. email@gmail.com)"
-                            value={(sourceWithGcal as any).calendarId || ""}
+                            value={source.calendarId ?? ""}
                             onChange={changeListener((x) => ({
-                                ...sourceWithGcal,
+                                ...source,
                                 calendarId: x,
                                 name: x,
                             }))}
@@ -289,9 +285,9 @@ function GoogleCalendarSelect<T extends Partial<CalendarInfo>>({
                     <input
                         required
                         type="text"
-                        value={(sourceWithGcal as any).name || ""}
+                        value={source.name ?? ""}
                         onChange={changeListener((x) => ({
-                            ...sourceWithGcal,
+                            ...source,
                             name: x,
                         }))}
                     />
@@ -391,7 +387,7 @@ export const AddCalendarSource = ({
                 )}
                 {isGcal && (
                     <GoogleCalendarSelect
-                        source={setting}
+                        source={setting as Partial<GcalSource>}
                         changeListener={makeChangeListener}
                         googleCalendars={googleCalendars || []}
                     />

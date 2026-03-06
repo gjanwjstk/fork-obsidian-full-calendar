@@ -32,6 +32,7 @@ END:VCALENDAR 1`] = `
     "id": "ics::7389432083-0-40713-74006::2023-02-26::single",
     "title": "EVENT TITLE",
     "type": "single",
+    "uid": "7389432083-0-40713-74006",
   },
 ]
 `;
@@ -153,6 +154,7 @@ END:VCALENDAR
     "id": "ics::5r09pnnlktaqivstai5vlbqb1h@google.com::2022-03-02::single",
     "title": "All day event",
     "type": "single",
+    "uid": "5r09pnnlktaqivstai5vlbqb1h@google.com",
   },
   {
     "allDay": false,
@@ -164,6 +166,7 @@ END:VCALENDAR
     "startTime": "11:00",
     "title": "Recurring event",
     "type": "rrule",
+    "uid": "5tt2avr2th0h65homv3b6jeqof@google.com",
   },
   {
     "allDay": false,
@@ -174,6 +177,7 @@ END:VCALENDAR
     "startTime": "16:45",
     "title": "Hello, iCal!",
     "type": "single",
+    "uid": "40mdbe6fvc1rmd60n6r0c3go7e@google.com",
   },
   {
     "allDay": false,
@@ -184,6 +188,7 @@ END:VCALENDAR
     "startTime": "19:00",
     "title": "Work on GCal Sync",
     "type": "single",
+    "uid": "44hekcaaf0or7547vhqa772mqj@google.com",
   },
   {
     "allDay": true,
@@ -192,6 +197,7 @@ END:VCALENDAR
     "id": "ics::7ooluqb717vabebvc9gkc38c9l@google.com::2022-02-16::single",
     "title": "Announce Beta",
     "type": "single",
+    "uid": "7ooluqb717vabebvc9gkc38c9l@google.com",
   },
 ]
 `;

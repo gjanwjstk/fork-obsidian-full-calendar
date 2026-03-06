@@ -2,7 +2,7 @@ import { DateTime } from "luxon";
 import * as React from "react";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { CalendarInfo, OFCEvent } from "../../types";
-import { getAccentColorHex, toHexForColorInput } from "../../colorUtils";
+import { getAccentColorHex, toHexForColorInput } from "../../utils/colorUtils";
 
 const AUTO_SAVE_DEBOUNCE_MS = 400;
 
@@ -242,8 +242,12 @@ export const EditEvent = ({
         async (overrides?: Partial<OFCEvent>) => {
             const base = getEventData();
             const data = (
-                overrides ? { ...base, ...overrides } : base
+                overrides ? { ...base, ...overrides } : { ...base }
             ) as OFCEvent;
+            // Preserve uid when editing (form does not expose it)
+            if (!isCreate && initialEvent?.uid) {
+                data.uid = initialEvent.uid;
+            }
             if (isCreate && !data.title) return;
             if (isCreate && !date) return;
             if (isCreate && hasCreatedRef.current) return;
@@ -258,7 +262,7 @@ export const EditEvent = ({
                 /* submit handles notice */
             }
         },
-        [getEventData, isCreate, date, calendarIndex, submit]
+        [getEventData, isCreate, date, calendarIndex, submit, initialEvent]
     );
 
     const autoSave = useCallback(() => {

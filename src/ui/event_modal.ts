@@ -96,7 +96,8 @@ export function launchEditModal(plugin: FullCalendarPlugin, eventId: string) {
                             await plugin.cache.moveEventToCalendar(
                                 eventId,
                                 calendars[calendarIndex].id,
-                                data
+                                data,
+                                calendars[calIdx].id
                             );
                             forceClose();
                             return;

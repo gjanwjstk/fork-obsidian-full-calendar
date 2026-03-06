@@ -49,6 +49,7 @@ function icsToOFC(input: ical.Event): OFCEvent {
         return {
             type: "rrule",
             title: input.summary,
+            uid: input.uid,
             id: `ics::${input.uid}::${getDate(input.startDate)}::recurring`,
             rrule: rrule.toString(),
             skipDates: exdates,
@@ -78,6 +79,7 @@ function icsToOFC(input: ical.Event): OFCEvent {
         const allDay = input.startDate.isDate;
         return {
             type: "single",
+            uid: input.uid,
             id: `ics::${input.uid}::${date}::single`,
             title: input.summary,
             date,

@@ -1,5 +1,5 @@
 import { ZodError, z } from "zod";
-import { getAccentColorHex } from "../colorUtils";
+import { getAccentColorHex } from "../utils/colorUtils";
 import { OFCEvent } from "./schema";
 
 const calendarOptionsSchema = z.discriminatedUnion("type", [

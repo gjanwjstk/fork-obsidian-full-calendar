@@ -61,6 +61,7 @@ export const TimeSchema = z.discriminatedUnion("allDay", [
 export const CommonSchema = z.object({
     title: z.string(),
     id: z.string().optional(),
+    uid: z.string().optional(),
     color: z.string().nullable().optional(),
 });
 
@@ -129,4 +130,15 @@ type Json =
 
 export function serializeEvent(obj: OFCEvent): Json {
     return { ...obj };
+}
+
+/** Generate a new UID for local events (iCal-compatible format). */
+export function generateEventUid(): string {
+    const hex = () =>
+        Math.floor(Math.random() * 0x10000)
+            .toString(16)
+            .padStart(4, "0");
+    return `${hex()}${hex()}-${hex()}-4${hex().slice(
+        1
+    )}-${hex()}-${hex()}${hex()}${hex()}@fullcalendar.local`;
 }
